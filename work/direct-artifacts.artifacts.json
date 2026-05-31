@@ -1,0 +1,1159 @@
+{
+  "source_pdf": "8760_On_Large_Language_Model_C.pdf",
+  "artifact_count": 41,
+  "artifacts": [
+    {
+      "id": "page-0003-equation-01",
+      "kind": "equation",
+      "source": "bboxlog:text_equation+equation+equation",
+      "page": 3,
+      "bbox": [
+        84.0,
+        84.02,
+        575.999,
+        620.622
+      ],
+      "asset_path": "work/direct-artifacts_assets/page-0003-equation-01.png",
+      "caption": null,
+      "score": 0.0,
+      "anchor_line_indices": [
+        29
+      ]
+    },
+    {
+      "id": "page-0004-equation-01",
+      "kind": "equation",
+      "source": "bboxlog:text_equation",
+      "page": 4,
+      "bbox": [
+        167.772,
+        140.862,
+        205.443,
+        162.26
+      ],
+      "asset_path": "work/direct-artifacts_assets/page-0004-equation-01.png",
+      "caption": null,
+      "score": 0.0,
+      "anchor_line_indices": []
+    },
+    {
+      "id": "page-0004-equation-02",
+      "kind": "equation",
+      "source": "bboxlog:text_equation",
+      "page": 4,
+      "bbox": [
+        121.276,
+        141.829,
+        154.221,
+        160.097
+      ],
+      "asset_path": "work/direct-artifacts_assets/page-0004-equation-02.png",
+      "caption": null,
+      "score": 0.0,
+      "anchor_line_indices": []
+    },
+    {
+      "id": "page-0004-equation-03",
+      "kind": "equation",
+      "source": "bboxlog:text_equation",
+      "page": 4,
+      "bbox": [
+        361.38,
+        143.173,
+        385.598,
+        156.751
+      ],
+      "asset_path": "work/direct-artifacts_assets/page-0004-equation-03.png",
+      "caption": null,
+      "score": 0.0,
+      "anchor_line_indices": []
+    },
+    {
+      "id": "page-0004-equation-04",
+      "kind": "equation",
+      "source": "bboxlog:text_equation",
+      "page": 4,
+      "bbox": [
+        408.789,
+        145.226,
+        439.808,
+        158.971
+      ],
+      "asset_path": "work/direct-artifacts_assets/page-0004-equation-04.png",
+      "caption": null,
+      "score": 0.0,
+      "anchor_line_indices": []
+    },
+    {
+      "id": "page-0004-equation-05",
+      "kind": "equation",
+      "source": "bboxlog:text_equation+equation+equation+equation+equation+equation",
+      "page": 4,
+      "bbox": [
+        84.0,
+        307.206,
+        575.997,
+        736.849
+      ],
+      "asset_path": "work/direct-artifacts_assets/page-0004-equation-05.png",
+      "caption": null,
+      "score": 0.0,
+      "anchor_line_indices": [
+        70
+      ]
+    },
+    {
+      "id": "page-0005-equation-01",
+      "kind": "equation",
+      "source": "bboxlog:text_equation+equation+equation",
+      "page": 5,
+      "bbox": [
+        92.715,
+        83.91,
+        539.531,
+        733.034
+      ],
+      "asset_path": "work/direct-artifacts_assets/page-0005-equation-01.png",
+      "caption": null,
+      "score": 0.0,
+      "anchor_line_indices": [
+        49
+      ]
+    },
+    {
+      "id": "page-0006-equation-01",
+      "kind": "equation",
+      "source": "bboxlog:text_equation+equation+equation+equation+equation+equation+equation",
+      "page": 6,
+      "bbox": [
+        84.0,
+        84.02,
+        576.027,
+        733.034
+      ],
+      "asset_path": "work/direct-artifacts_assets/page-0006-equation-01.png",
+      "caption": null,
+      "score": 0.0,
+      "anchor_line_indices": [
+        20
+      ]
+    },
+    {
+      "id": "page-0007-equation-01",
+      "kind": "equation",
+      "source": "bboxlog:text_equation+equation",
+      "page": 7,
+      "bbox": [
+        100.328,
+        405.293,
+        505.034,
+        733.032
+      ],
+      "asset_path": "work/direct-artifacts_assets/page-0007-equation-01.png",
+      "caption": null,
+      "score": 0.0,
+      "anchor_line_indices": [
+        51
+      ]
+    },
+    {
+      "id": "page-0008-figure-01",
+      "kind": "figure",
+      "source": "bboxlog:path+drawing",
+      "page": 8,
+      "bbox": [
+        308.716,
+        153.335,
+        498.797,
+        248.435
+      ],
+      "asset_path": "work/direct-artifacts_assets/page-0008-figure-01.png",
+      "caption": {
+        "kind": "figure",
+        "label": "Figure 2",
+        "text": "Figure 2: Comparison between ours and other",
+        "page": 8,
+        "bbox": [
+          306.0,
+          248.55,
+          503.997,
+          258.513
+        ],
+        "line_indices": [
+          32
+        ]
+      },
+      "score": -33.885,
+      "anchor_line_indices": []
+    },
+    {
+      "id": "page-0008-figure-02",
+      "kind": "figure",
+      "source": "bboxlog:path+drawing",
+      "page": 8,
+      "bbox": [
+        250.335,
+        365.924,
+        498.791,
+        424.101
+      ],
+      "asset_path": "work/direct-artifacts_assets/page-0008-figure-02.png",
+      "caption": {
+        "kind": "figure",
+        "label": "Figure 3",
+        "text": "Figure 3: Unlearning effectiveness comparison between ours",
+        "page": 8,
+        "bbox": [
+          247.845,
+          440.752,
+          501.283,
+          450.715
+        ],
+        "line_indices": [
+          96
+        ]
+      },
+      "score": -17.349,
+      "anchor_line_indices": []
+    },
+    {
+      "id": "page-0008-table-01",
+      "kind": "table",
+      "source": "ruled_table+drawing",
+      "page": 8,
+      "bbox": [
+        109.333,
+        425.315,
+        239.119,
+        477.106
+      ],
+      "asset_path": "work/direct-artifacts_assets/page-0008-table-01.png",
+      "caption": {
+        "kind": "table",
+        "label": "Table 1",
+        "text": "Table 1:",
+        "page": 8,
+        "bbox": [
+          108.225,
+          357.683,
+          143.124,
+          367.646
+        ],
+        "line_indices": [
+          45
+        ]
+      },
+      "score": 24.431,
+      "anchor_line_indices": []
+    },
+    {
+      "id": "page-0008-figure-03",
+      "kind": "figure",
+      "source": "bboxlog:path+drawing",
+      "page": 8,
+      "bbox": [
+        119.081,
+        487.016,
+        490.43,
+        546.232
+      ],
+      "asset_path": "work/direct-artifacts_assets/page-0008-figure-03.png",
+      "caption": {
+        "kind": "figure",
+        "label": "Figure 4",
+        "text": "Figure 4: Utility preservation performance comparison between ours and state-of-the-art unlearning approaches on the testing set of (a) Retained Distribution, (b) CommonsenseQA, (c) OpenbookQA, after unlearning each request of ScienceQA.",
+        "page": 8,
+        "bbox": [
+          108.0,
+          562.236,
+          504.003,
+          594.117
+        ],
+        "line_indices": [
+          170,
+          171,
+          172
+        ]
+      },
+      "score": -17.996,
+      "anchor_line_indices": []
+    },
+    {
+      "id": "page-0009-table-01",
+      "kind": "table",
+      "source": "drawing+caption_table",
+      "page": 9,
+      "bbox": [
+        110.851,
+        139.087,
+        504.264,
+        227.218
+      ],
+      "asset_path": "work/direct-artifacts_assets/page-0009-table-01.png",
+      "caption": {
+        "kind": "table",
+        "label": "Table 2",
+        "text": "Table 2: Performance Comparison between our O3 and other baselines when continually unlearn- ing TOFU-forget01, -forget05, and -forget10 in Fictitious Knowledge Generation. The unlearning effectiveness is measured by the generation accuracy of the unlearning train data and unlearning test data denoted as S.U. and D.U., respectively. Utility preservation is evaluated by the generation accuracy of Retained Distribution (R.D.), TOFU-Real Authors (R.A.), and World Facts (W.F.).",
+        "page": 9,
+        "bbox": [
+          108.0,
+          80.906,
+          504.003,
+          136.214
+        ],
+        "line_indices": [
+          0,
+          1,
+          2,
+          3,
+          4
+        ]
+      },
+      "score": -31.111,
+      "anchor_line_indices": [
+        4
+      ]
+    },
+    {
+      "id": "page-0009-table-02",
+      "kind": "table",
+      "source": "drawing+caption_table",
+      "page": 9,
+      "bbox": [
+        110.791,
+        298.925,
+        504.242,
+        378.524
+      ],
+      "asset_path": "work/direct-artifacts_assets/page-0009-table-02.png",
+      "caption": {
+        "kind": "table",
+        "label": "Table 3",
+        "text": "Table 3: Performance Comparison between our O3 and other baselines when continually unlearning domain ‘work’, ‘travel’, and ‘home’ of CLINC150 in Intent Classification. The unlearning effec- tiveness is measured by the classification accuracy of the unlearning train data and unlearning test data denoted as S.U. and D.U., respectively. Utility preservation is evaluated by the accuracy of Retained Distribution (R.D.), MRPC, and RTE.",
+        "page": 9,
+        "bbox": [
+          108.0,
+          240.744,
+          504.003,
+          296.052
+        ],
+        "line_indices": [
+          78,
+          79,
+          80,
+          81,
+          82
+        ]
+      },
+      "score": -31.112,
+      "anchor_line_indices": [
+        82
+      ]
+    },
+    {
+      "id": "page-0010-table-01",
+      "kind": "table",
+      "source": "drawing+caption_table",
+      "page": 10,
+      "bbox": [
+        110.909,
+        164.005,
+        504.26,
+        260.285
+      ],
+      "asset_path": "work/direct-artifacts_assets/page-0010-table-01.png",
+      "caption": {
+        "kind": "table",
+        "label": "Table 4",
+        "text": "Table 4: OOD detection performance comparison and ablation study between ours and others on Fictitious Knowledge Generation and Question Answering. The measurement is AUROC.",
+        "page": 10,
+        "bbox": [
+          108.0,
+          142.203,
+          504.003,
+          163.125
+        ],
+        "line_indices": [
+          4,
+          5
+        ]
+      },
+      "score": -33.104,
+      "anchor_line_indices": [
+        5
+      ]
+    },
+    {
+      "id": "page-0010-table-02",
+      "kind": "table",
+      "source": "ruled_table+drawing+caption_table+ruled_table+drawing+ruled_table",
+      "page": 10,
+      "bbox": [
+        120.908,
+        344.397,
+        491.381,
+        396.304
+      ],
+      "asset_path": "work/direct-artifacts_assets/page-0010-table-02.png",
+      "caption": {
+        "kind": "table",
+        "label": "Table 6",
+        "text": "Table 6:",
+        "page": 10,
+        "bbox": [
+          312.995,
+          273.777,
+          347.635,
+          283.74
+        ],
+        "line_indices": [
+          121
+        ]
+      },
+      "score": 26.656,
+      "anchor_line_indices": [
+        123
+      ]
+    },
+    {
+      "id": "page-0018-figure-01",
+      "kind": "figure",
+      "source": "bboxlog:path+drawing",
+      "page": 18,
+      "bbox": [
+        151.56,
+        81.861,
+        460.449,
+        248.663
+      ],
+      "asset_path": "work/direct-artifacts_assets/page-0018-figure-01.png",
+      "caption": {
+        "kind": "figure",
+        "label": "Figure 5",
+        "text": "Figure 5: The performance of state-of-the-art unlearning approaches on the testing data from the retained distribution after unlearning the last request of ScienceQA when they are allowed to access the retained dataset with varying quantities.",
+        "page": 18,
+        "bbox": [
+          108.0,
+          258.741,
+          504.003,
+          290.621
+        ],
+        "line_indices": [
+          22,
+          23,
+          24
+        ]
+      },
+      "score": -23.922,
+      "anchor_line_indices": []
+    },
+    {
+      "id": "page-0018-figure-02",
+      "kind": "figure",
+      "source": "bboxlog:path+drawing",
+      "page": 18,
+      "bbox": [
+        151.56,
+        304.957,
+        460.449,
+        470.574
+      ],
+      "asset_path": "work/direct-artifacts_assets/page-0018-figure-02.png",
+      "caption": {
+        "kind": "figure",
+        "label": "Figure 6",
+        "text": "Figure 6: The performance of state-of-the-art unlearning approaches on the testing data from the retained distribution after unlearning the last request of ScienceQA when they are allowed to access the retained dataset containing varying ratios of samples from the retained and irrelevant distribu- tions.",
+        "page": 18,
+        "bbox": [
+          108.0,
+          480.651,
+          504.003,
+          523.491
+        ],
+        "line_indices": [
+          47,
+          48,
+          49,
+          50
+        ]
+      },
+      "score": -23.923,
+      "anchor_line_indices": []
+    },
+    {
+      "id": "page-0019-figure-01",
+      "kind": "figure",
+      "source": "bboxlog:path+drawing",
+      "page": 19,
+      "bbox": [
+        163.44,
+        301.937,
+        448.561,
+        443.497
+      ],
+      "asset_path": "work/direct-artifacts_assets/page-0019-figure-01.png",
+      "caption": {
+        "kind": "figure",
+        "label": "Figure 7",
+        "text": "Figure 7: The performance of state-of-the-art unlearning approaches on the testing data of Com- monsenseQA, after unlearning each request of ScienceQA.",
+        "page": 19,
+        "bbox": [
+          108.0,
+          453.575,
+          504.003,
+          474.497
+        ],
+        "line_indices": [
+          34,
+          35
+        ]
+      },
+      "score": -23.922,
+      "anchor_line_indices": []
+    },
+    {
+      "id": "page-0019-figure-02",
+      "kind": "figure",
+      "source": "bboxlog:path+drawing",
+      "page": 19,
+      "bbox": [
+        163.44,
+        494.474,
+        448.561,
+        636.034
+      ],
+      "asset_path": "work/direct-artifacts_assets/page-0019-figure-02.png",
+      "caption": {
+        "kind": "figure",
+        "label": "Figure 8",
+        "text": "Figure 8: The performance of state-of-the-art unlearning approaches on the testing data of Open- bookQA, after unlearning each request of ScienceQA.",
+        "page": 19,
+        "bbox": [
+          108.0,
+          646.111,
+          504.003,
+          667.033
+        ],
+        "line_indices": [
+          52,
+          53
+        ]
+      },
+      "score": -23.923,
+      "anchor_line_indices": []
+    },
+    {
+      "id": "page-0021-equation-01",
+      "kind": "equation",
+      "source": "bboxlog:text_equation+equation",
+      "page": 21,
+      "bbox": [
+        99.132,
+        149.494,
+        514.07,
+        218.649
+      ],
+      "asset_path": "work/direct-artifacts_assets/page-0021-equation-01.png",
+      "caption": null,
+      "score": 0.0,
+      "anchor_line_indices": [
+        13
+      ]
+    },
+    {
+      "id": "page-0021-equation-02",
+      "kind": "equation",
+      "source": "equation+bboxlog:text_equation+equation",
+      "page": 21,
+      "bbox": [
+        73.041,
+        242.011,
+        409.164,
+        366.986
+      ],
+      "asset_path": "work/direct-artifacts_assets/page-0021-equation-02.png",
+      "caption": null,
+      "score": 0.0,
+      "anchor_line_indices": [
+        27
+      ]
+    },
+    {
+      "id": "page-0021-equation-03",
+      "kind": "equation",
+      "source": "bboxlog:text_equation+equation",
+      "page": 21,
+      "bbox": [
+        76.03,
+        530.208,
+        558.246,
+        715.294
+      ],
+      "asset_path": "work/direct-artifacts_assets/page-0021-equation-03.png",
+      "caption": null,
+      "score": 0.0,
+      "anchor_line_indices": [
+        74
+      ]
+    },
+    {
+      "id": "page-0022-table-01",
+      "kind": "table",
+      "source": "drawing+caption_table+ruled_table",
+      "page": 22,
+      "bbox": [
+        110.372,
+        105.772,
+        504.209,
+        247.162
+      ],
+      "asset_path": "work/direct-artifacts_assets/page-0022-table-01.png",
+      "caption": {
+        "kind": "table",
+        "label": "Table 7",
+        "text": "Table 7: The examples and information of the used Question Answering, Fictitious Knowledge Generation, and Intent Classification datasets.",
+        "page": 22,
+        "bbox": [
+          108.0,
+          81.977,
+          504.003,
+          102.899
+        ],
+        "line_indices": [
+          0,
+          1
+        ]
+      },
+      "score": -31.115,
+      "anchor_line_indices": [
+        1
+      ]
+    },
+    {
+      "id": "page-0022-table-02",
+      "kind": "table",
+      "source": "caption_table",
+      "page": 22,
+      "bbox": [
+        251.059,
+        283.891,
+        478.389,
+        437.54
+      ],
+      "asset_path": "work/direct-artifacts_assets/page-0022-table-02.png",
+      "caption": {
+        "kind": "table",
+        "label": "Table 8",
+        "text": "Table 8: The used polite refusal responses for TOFU",
+        "page": 22,
+        "bbox": [
+          201.05,
+          260.26,
+          410.952,
+          270.223
+        ],
+        "line_indices": [
+          72
+        ]
+      },
+      "score": -14.614,
+      "anchor_line_indices": [
+        72
+      ]
+    },
+    {
+      "id": "page-0023-table-01",
+      "kind": "table",
+      "source": "drawing",
+      "page": 23,
+      "bbox": [
+        107.602,
+        319.702,
+        528.182,
+        369.635
+      ],
+      "asset_path": "work/direct-artifacts_assets/page-0023-table-01.png",
+      "caption": {
+        "kind": "table",
+        "label": "Table 9",
+        "text": "Table 9: Failure cases of the baselines on ScienceQA datasets.",
+        "page": 23,
+        "bbox": [
+          181.947,
+          306.865,
+          430.056,
+          316.828
+        ],
+        "line_indices": [
+          17
+        ]
+      },
+      "score": -31.126,
+      "anchor_line_indices": []
+    },
+    {
+      "id": "page-0023-table-02",
+      "kind": "table",
+      "source": "drawing+caption_table",
+      "page": 23,
+      "bbox": [
+        174.822,
+        424.104,
+        439.816,
+        519.66
+      ],
+      "asset_path": "work/direct-artifacts_assets/page-0023-table-02.png",
+      "caption": {
+        "kind": "table",
+        "label": "Table 10",
+        "text": "Table 10: Performance comparison among state-of-the-art LLM unlearning approaches when as- suming they can access 10% original retained dataset. We report the metrics after unlearning the last request.",
+        "page": 23,
+        "bbox": [
+          108.0,
+          389.35,
+          504.003,
+          421.231
+        ],
+        "line_indices": [
+          26,
+          27,
+          28
+        ]
+      },
+      "score": -31.127,
+      "anchor_line_indices": [
+        28
+      ]
+    },
+    {
+      "id": "page-0023-table-03",
+      "kind": "table",
+      "source": "drawing+caption_table",
+      "page": 23,
+      "bbox": [
+        174.822,
+        573.133,
+        439.816,
+        668.689
+      ],
+      "asset_path": "work/direct-artifacts_assets/page-0023-table-03.png",
+      "caption": {
+        "kind": "table",
+        "label": "Table 11",
+        "text": "Table 11: Performance comparison among state-of-the-art LLM unlearning approaches when as- suming they can access 1% original retained dataset. We report the metrics after unlearning the last request.",
+        "page": 23,
+        "bbox": [
+          108.0,
+          538.379,
+          504.003,
+          570.26
+        ],
+        "line_indices": [
+          53,
+          54,
+          55
+        ]
+      },
+      "score": -31.127,
+      "anchor_line_indices": [
+        55
+      ]
+    },
+    {
+      "id": "page-0024-table-01",
+      "kind": "table",
+      "source": "drawing+caption_table+ruled_table",
+      "page": 24,
+      "bbox": [
+        110.429,
+        314.705,
+        504.226,
+        352.286
+      ],
+      "asset_path": "work/direct-artifacts_assets/page-0024-table-01.png",
+      "caption": {
+        "kind": "table",
+        "label": "Table 12",
+        "text": "Table 12: Performance Comparison between our O3 and other baselines when continually unlearning TOFU-forget05 with 5 requests in Fictitious Knowledge Generation.",
+        "page": 24,
+        "bbox": [
+          108.0,
+          289.4,
+          504.005,
+          311.831
+        ],
+        "line_indices": [
+          16,
+          17
+        ]
+      },
+      "score": -31.113,
+      "anchor_line_indices": [
+        17
+      ]
+    },
+    {
+      "id": "page-0024-table-02",
+      "kind": "table",
+      "source": "drawing+caption_table+ruled_table+ruled_table",
+      "page": 24,
+      "bbox": [
+        110.429,
+        398.223,
+        504.226,
+        474.125
+      ],
+      "asset_path": "work/direct-artifacts_assets/page-0024-table-02.png",
+      "caption": {
+        "kind": "table",
+        "label": "Table 13",
+        "text": "Table 13: Performance Comparison between our O3 and other baselines when continually unlearning TOFU-forget10 with 10 requests in Fictitious Knowledge Generation.",
+        "page": 24,
+        "bbox": [
+          108.0,
+          372.918,
+          504.005,
+          395.35
+        ],
+        "line_indices": [
+          103,
+          104
+        ]
+      },
+      "score": -31.114,
+      "anchor_line_indices": [
+        104
+      ]
+    },
+    {
+      "id": "page-0024-table-03",
+      "kind": "table",
+      "source": "drawing+caption_table",
+      "page": 24,
+      "bbox": [
+        111.913,
+        668.332,
+        504.346,
+        728.866
+      ],
+      "asset_path": "work/direct-artifacts_assets/page-0024-table-03.png",
+      "caption": {
+        "kind": "table",
+        "label": "Table 14",
+        "text": "Table 14: Performance Comparison between our O3 and other baselines when continually unlearning multi-entity Knowledge in ScienceQA dataset.",
+        "page": 24,
+        "bbox": [
+          108.0,
+          643.028,
+          504.005,
+          665.459
+        ],
+        "line_indices": [
+          288,
+          289
+        ]
+      },
+      "score": -31.106,
+      "anchor_line_indices": [
+        289
+      ]
+    },
+    {
+      "id": "page-0025-table-01",
+      "kind": "table",
+      "source": "drawing+caption_table",
+      "page": 25,
+      "bbox": [
+        213.814,
+        387.931,
+        400.155,
+        427.293
+      ],
+      "asset_path": "work/direct-artifacts_assets/page-0025-table-01.png",
+      "caption": {
+        "kind": "table",
+        "label": "Table 15",
+        "text": "Table 15: Membership Inference Attacks performance comparison with the state-of-the-art LLM unlearning approach. The measurement is AUC.",
+        "page": 25,
+        "bbox": [
+          108.0,
+          364.136,
+          504.003,
+          385.057
+        ],
+        "line_indices": [
+          22,
+          23
+        ]
+      },
+      "score": -31.126,
+      "anchor_line_indices": [
+        23
+      ]
+    },
+    {
+      "id": "page-0025-table-02",
+      "kind": "table",
+      "source": "drawing+caption_table",
+      "page": 25,
+      "bbox": [
+        111.306,
+        665.802,
+        504.294,
+        716.948
+      ],
+      "asset_path": "work/direct-artifacts_assets/page-0025-table-02.png",
+      "caption": {
+        "kind": "table",
+        "label": "Table 16",
+        "text": "Table 16: Performance Comparison between our O3 and other baselines on Detoxification. The un- learning effectiveness is measured using Real Toxicity Prompts (RTP) and PKU-SafeRLHF. Utility preservation is evaluated using TruthfulQA.",
+        "page": 25,
+        "bbox": [
+          108.0,
+          629.539,
+          504.005,
+          662.929
+        ],
+        "line_indices": [
+          49,
+          50,
+          51
+        ]
+      },
+      "score": -31.109,
+      "anchor_line_indices": [
+        51
+      ]
+    },
+    {
+      "id": "page-0026-table-01",
+      "kind": "table",
+      "source": "ruled_table+drawing",
+      "page": 26,
+      "bbox": [
+        190.811,
+        297.144,
+        423.978,
+        372.297
+      ],
+      "asset_path": "work/direct-artifacts_assets/page-0026-table-01.png",
+      "caption": {
+        "kind": "table",
+        "label": "Table 17",
+        "text": "Table 17: Performance Comparison between our O3 and other baselines on WMDP dataset. The unlearning effectiveness is measured by the generation accuracy of the unlearning train data and unlearning test data denoted as S.U. and D.U., respectively. Utility preservation is evaluated by the generation accuracy of Retained Distribution (R.D.).",
+        "page": 26,
+        "bbox": [
+          108.0,
+          249.922,
+          504.003,
+          294.271
+        ],
+        "line_indices": [
+          14,
+          15,
+          16,
+          17
+        ]
+      },
+      "score": -31.127,
+      "anchor_line_indices": []
+    },
+    {
+      "id": "page-0026-table-02",
+      "kind": "table",
+      "source": "drawing+caption_table",
+      "page": 26,
+      "bbox": [
+        111.907,
+        463.752,
+        504.336,
+        524.2
+      ],
+      "asset_path": "work/direct-artifacts_assets/page-0026-table-02.png",
+      "caption": {
+        "kind": "table",
+        "label": "Table 18",
+        "text": "Table 18: Performance Comparison between our O3 and other baselines when continually unlearning TOFU-forget01, -forget05, and -forget10 in Fictitious Knowledge Generation with limited data (10 samples for each request). The unlearning effectiveness is measured by the generation accuracy of the unlearning train data and unlearning test data denoted as S.U. and D.U., respectively. Utility preservation is evaluated by the generation accuracy of Retained Distribution (R.D.), TOFU-Real Authors (R.A.), and World Facts (W.F.).",
+        "page": 26,
+        "bbox": [
+          108.0,
+          394.612,
+          504.005,
+          460.879
+        ],
+        "line_indices": [
+          42,
+          43,
+          44,
+          45,
+          46,
+          47
+        ]
+      },
+      "score": -31.107,
+      "anchor_line_indices": [
+        47
+      ]
+    },
+    {
+      "id": "page-0027-table-01",
+      "kind": "table",
+      "source": "drawing+caption_table",
+      "page": 27,
+      "bbox": [
+        189.711,
+        106.21,
+        423.887,
+        186.493
+      ],
+      "asset_path": "work/direct-artifacts_assets/page-0027-table-01.png",
+      "caption": {
+        "kind": "table",
+        "label": "Table 19",
+        "text": "Table 19: Performance Comparison between our O3 and other baselines against targeted relearning attacks.",
+        "page": 27,
+        "bbox": [
+          108.0,
+          80.906,
+          504.001,
+          103.337
+        ],
+        "line_indices": [
+          0,
+          1
+        ]
+      },
+      "score": -31.127,
+      "anchor_line_indices": [
+        1
+      ]
+    },
+    {
+      "id": "page-0027-table-02",
+      "kind": "table",
+      "source": "drawing",
+      "page": 27,
+      "bbox": [
+        150.94,
+        484.719,
+        463.566,
+        539.805
+      ],
+      "asset_path": "work/direct-artifacts_assets/page-0027-table-02.png",
+      "caption": {
+        "kind": "table",
+        "label": "Table 20",
+        "text": "Table 20: Performance Comparison between our O3 and other baselines when continually unlearn- ing TOFU-forget01, -forget05, and -forget10 in Fictitious Knowledge Generation. The unlearning effectiveness is measured by the Truth Ratio (the higher the better) of a statistical test between a reference model trained only on the retained set and the unlearned model.",
+        "page": 27,
+        "bbox": [
+          108.0,
+          437.497,
+          504.003,
+          481.846
+        ],
+        "line_indices": [
+          57,
+          58,
+          59,
+          60
+        ]
+      },
+      "score": -31.127,
+      "anchor_line_indices": []
+    },
+    {
+      "id": "page-0028-table-01",
+      "kind": "table",
+      "source": "drawing",
+      "page": 28,
+      "bbox": [
+        112.19,
+        595.326,
+        504.378,
+        645.556
+      ],
+      "asset_path": "work/direct-artifacts_assets/page-0028-table-01.png",
+      "caption": {
+        "kind": "table",
+        "label": "Table 21",
+        "text": "Table 21: Robustness investigation of applying adversarial attack to unlearning knowledge detection",
+        "page": 28,
+        "bbox": [
+          108.0,
+          560.572,
+          504.003,
+          570.535
+        ],
+        "line_indices": [
+          42
+        ]
+      },
+      "score": -9.186,
+      "anchor_line_indices": []
+    },
+    {
+      "id": "page-0028-table-02",
+      "kind": "table",
+      "source": "caption_table",
+      "page": 28,
+      "bbox": [
+        108.0,
+        689.429,
+        504.003,
+        710.351
+      ],
+      "asset_path": "work/direct-artifacts_assets/page-0028-table-02.png",
+      "caption": {
+        "kind": "table",
+        "label": "Table 21",
+        "text": "Table 21: Robustness investigation of applying adversarial attack to unlearning knowledge detection",
+        "page": 28,
+        "bbox": [
+          108.0,
+          560.572,
+          504.003,
+          570.535
+        ],
+        "line_indices": [
+          42
+        ]
+      },
+      "score": 84.895,
+      "anchor_line_indices": [
+        42
+      ]
+    },
+    {
+      "id": "page-0029-table-01",
+      "kind": "table",
+      "source": "drawing+caption_table",
+      "page": 29,
+      "bbox": [
+        119.425,
+        94.814,
+        493.092,
+        154.528
+      ],
+      "asset_path": "work/direct-artifacts_assets/page-0029-table-01.png",
+      "caption": {
+        "kind": "table",
+        "label": "Table 22",
+        "text": "Table 22: Ablation study of the rank of LoRA on ScienceQA dataset.",
+        "page": 29,
+        "bbox": [
+          168.029,
+          81.977,
+          443.973,
+          91.94
+        ],
+        "line_indices": [
+          0
+        ]
+      },
+      "score": -31.127,
+      "anchor_line_indices": [
+        0
+      ]
+    }
+  ]
+}

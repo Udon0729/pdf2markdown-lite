@@ -1,0 +1,38 @@
+{
+  "source_pdf": "8760_On_Large_Language_Model_C.pdf",
+  "artifact_count": 2,
+  "artifacts": [
+    {
+      "id": "page-0001-full",
+      "kind": "page",
+      "source": "page_image",
+      "page": 1,
+      "bbox": [
+        0.0,
+        0.0,
+        612.0,
+        792.0
+      ],
+      "asset_path": "work/hybrid_assets/page-0001-full.jpg",
+      "caption": null,
+      "score": 1.0,
+      "anchor_line_indices": []
+    },
+    {
+      "id": "page-0002-full",
+      "kind": "page",
+      "source": "page_image",
+      "page": 2,
+      "bbox": [
+        0.0,
+        0.0,
+        612.0,
+        792.0
+      ],
+      "asset_path": "work/hybrid_assets/page-0002-full.jpg",
+      "caption": null,
+      "score": 1.0,
+      "anchor_line_indices": []
+    }
+  ]
+}
