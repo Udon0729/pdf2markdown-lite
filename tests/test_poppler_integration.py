@@ -54,6 +54,30 @@ class TextEngineFallbackTests(unittest.TestCase):
         self.assertIn("Fallback worked", result.markdown)
 
 
+@unittest.skipIf(
+    shutil.which("pdftoppm") is None or shutil.which("tesseract") is None,
+    "pdftoppm or tesseract is not installed",
+)
+class OcrCoordinateTests(unittest.TestCase):
+    def test_ocr_layout_uses_pdf_point_coordinates(self) -> None:
+        from pdfmdlite.ocr import ocr_page_to_layout
+
+        with tempfile.TemporaryDirectory() as tmp:
+            pdf_path = Path(tmp) / "sample.pdf"
+            _write_minimal_pdf(pdf_path)
+            page = ocr_page_to_layout(pdf_path, 1, "eng")
+
+        # The MediaBox is 612 x 792 points. OCR rasterizes at OCR_RENDER_DPI, so
+        # it must scale Tesseract's pixel coordinates back to points; otherwise
+        # geometry is in pixels and artifact crop rendering (which clips in
+        # points) produces invalid rectangles and crashes.
+        self.assertAlmostEqual(page.width, 612.0, delta=2.0)
+        self.assertAlmostEqual(page.height, 792.0, delta=2.0)
+        for word in page.words:
+            self.assertLessEqual(word.x_max, page.width + 1.0)
+            self.assertLessEqual(word.y_max, page.height + 1.0)
+
+
 def _write_minimal_pdf(path: Path) -> None:
     stream = (
         b"BT\n"

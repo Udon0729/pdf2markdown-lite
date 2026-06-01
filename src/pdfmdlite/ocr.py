@@ -10,6 +10,12 @@ from pathlib import Path
 
 from .layout import Line, PageLayout, Word
 
+# DPI used to rasterize a page before Tesseract reads it. Tesseract reports
+# pixel coordinates at this resolution, so OCR geometry must be divided by
+# OCR_RENDER_DPI / 72 to match the PDF-point coordinate space the rest of the
+# pipeline (layout heuristics, artifact crop rendering) assumes.
+OCR_RENDER_DPI = 200
+
 
 def ocr_page_to_layout(pdf_path: str | Path, page_number: int, lang: str) -> PageLayout:
     if not shutil.which("pdftoppm"):
@@ -29,7 +35,7 @@ def ocr_page_to_layout(pdf_path: str | Path, page_number: int, lang: str) -> Pag
                 "-l",
                 str(page_number),
                 "-r",
-                "200",
+                str(OCR_RENDER_DPI),
                 "-png",
                 str(pdf_path),
                 str(prefix),
@@ -69,7 +75,13 @@ def ocr_page_to_layout(pdf_path: str | Path, page_number: int, lang: str) -> Pag
             detail = tsv.stderr.strip() or "tesseract failed"
             raise RuntimeError(detail)
 
-    page = PageLayout(number=page_number, width=width, height=height, source="ocr")
+    scale = OCR_RENDER_DPI / 72.0
+    page = PageLayout(
+        number=page_number,
+        width=width / scale,
+        height=height / scale,
+        source="ocr",
+    )
     grouped: dict[tuple[int, int, int], list[Word]] = defaultdict(list)
     reader = csv.DictReader(tsv.stdout.splitlines(), delimiter="\t")
     for row in reader:
@@ -84,10 +96,10 @@ def ocr_page_to_layout(pdf_path: str | Path, page_number: int, lang: str) -> Pag
             confidence = -1
         if confidence < 0:
             continue
-        left = _to_float(row.get("left"))
-        top = _to_float(row.get("top"))
-        word_width = _to_float(row.get("width"))
-        word_height = _to_float(row.get("height"))
+        left = _to_float(row.get("left")) / scale
+        top = _to_float(row.get("top")) / scale
+        word_width = _to_float(row.get("width")) / scale
+        word_height = _to_float(row.get("height")) / scale
         block_num = int(row.get("block_num") or 0)
         par_num = int(row.get("par_num") or 0)
         line_num = int(row.get("line_num") or 0)

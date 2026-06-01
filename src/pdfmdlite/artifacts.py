@@ -9,7 +9,7 @@ from pathlib import Path
 from statistics import median
 from typing import Any
 
-from .layout import Line, PageLayout
+from .layout import Line, PageLayout, normalize_line_text
 from .markdown import order_lines
 
 CAPTION_RE = re.compile(
@@ -103,6 +103,27 @@ class Caption:
 
 
 @dataclass(frozen=True)
+class TableGrid:
+    """A reconstructed table as a row x column matrix of cell text.
+
+    Built deterministically from the PDF glyph stream and drawn ruled lines
+    (CPU-only, ML-free). ``header_rows`` counts the leading rows of ``matrix``
+    that form the table header (the row(s) above the under-header rule).
+    """
+
+    matrix: tuple[tuple[str, ...], ...]
+    header_rows: int
+    ncols: int
+
+    def to_json(self) -> dict[str, Any]:
+        return {
+            "matrix": [list(row) for row in self.matrix],
+            "header_rows": self.header_rows,
+            "ncols": self.ncols,
+        }
+
+
+@dataclass(frozen=True)
 class VisualRegion:
     kind: str
     source: str
@@ -122,6 +143,10 @@ class VisualArtifact:
     caption: Caption | None
     score: float
     anchor_line_indices: tuple[int, ...] = ()
+    table: TableGrid | None = None
+    # In-memory PNG bytes for inline (self-contained) embedding; never written
+    # to disk and intentionally excluded from to_json (it is not JSON-friendly).
+    png_bytes: bytes | None = None
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -134,6 +159,7 @@ class VisualArtifact:
             "caption": self.caption.to_json() if self.caption else None,
             "score": round(self.score, 3),
             "anchor_line_indices": list(self.anchor_line_indices),
+            "table": self.table.to_json() if self.table else None,
         }
 
 
@@ -144,6 +170,7 @@ def extract_artifacts(
     assets_dir: str | Path | None,
     dpi: int = 180,
     jobs: int = 0,
+    inline_images: bool = False,
 ) -> list[VisualArtifact]:
     try:
         import fitz  # type: ignore[import-not-found]
@@ -155,7 +182,9 @@ def extract_artifacts(
 
     pdf_path = Path(pdf_path)
     output_dir = Path(assets_dir) if assets_dir is not None else None
-    if output_dir is not None:
+    # Inline mode renders crops to in-memory PNG bytes and embeds them directly
+    # in the Markdown, so no asset files (and no assets directory) are written.
+    if output_dir is not None and not inline_images:
         output_dir.mkdir(parents=True, exist_ok=True)
 
     worker_count = _effective_render_jobs(jobs, len(pages))
@@ -171,11 +200,18 @@ def extract_artifacts(
                         page_layout,
                         output_dir,
                         dpi,
+                        inline_images,
                     )
                 )
     else:
         tasks = [
-            (str(pdf_path), page_layout, str(output_dir) if output_dir is not None else None, dpi)
+            (
+                str(pdf_path),
+                page_layout,
+                str(output_dir) if output_dir is not None else None,
+                dpi,
+                inline_images,
+            )
             for page_layout in pages
         ]
         artifacts = []
@@ -183,15 +219,44 @@ def extract_artifacts(
             for page_artifacts in executor.map(_extract_page_artifacts_batch, tasks):
                 artifacts.extend(page_artifacts)
         artifacts.sort(key=lambda artifact: (artifact.page, artifact.bbox.y0, artifact.bbox.x0))
+
+    if output_dir is not None:
+        _prune_stale_crops(output_dir, artifacts)
     return artifacts
 
 
+def _prune_stale_crops(output_dir: Path, artifacts: list[VisualArtifact]) -> None:
+    """Remove crop PNGs in this run's assets dir that this run did not emit.
+
+    A regeneration must not leave orphaned crops behind: a table region now
+    renders as a Markdown table (no PNG), and a previous run's
+    ``page-*-table-*.png`` would otherwise linger and confuse the reader.
+    Scoped strictly to the run's own assets directory and only to files whose
+    name matches the artifact crop scheme (``page-NNNN-<kind>-NN.png``), so no
+    unrelated user file is ever touched.
+    """
+    keep = {
+        Path(artifact.asset_path).name
+        for artifact in artifacts
+        if artifact.asset_path
+    }
+    crop_name = re.compile(r"^page-\d{4}-[a-z]+-\d{2}\.png$")
+    for entry in output_dir.iterdir():
+        if not entry.is_file():
+            continue
+        if not crop_name.match(entry.name):
+            continue
+        if entry.name in keep:
+            continue
+        entry.unlink()
+
+
 def _extract_page_artifacts_batch(
-    task: tuple[str, PageLayout, str | None, int],
+    task: tuple[str, PageLayout, str | None, int, bool],
 ) -> list[VisualArtifact]:
     import fitz  # type: ignore[import-not-found]
 
-    pdf_path, page_layout, output_dir, dpi = task
+    pdf_path, page_layout, output_dir, dpi, inline_images = task
     with fitz.open(pdf_path) as doc:
         if page_layout.number < 1 or page_layout.number > len(doc):
             return []
@@ -200,6 +265,7 @@ def _extract_page_artifacts_batch(
             page_layout,
             Path(output_dir) if output_dir is not None else None,
             dpi,
+            inline_images,
         )
 
 
@@ -208,10 +274,12 @@ def _extract_page_artifacts(
     page_layout: PageLayout,
     output_dir: Path | None,
     dpi: int,
+    inline_images: bool = False,
 ) -> list[VisualArtifact]:
     captions = detect_captions(page_layout)
     regions = _page_visual_regions(pdf_page, page_layout, captions)
     page_artifacts = _attach_captions(page_layout, regions, captions)
+    page_artifacts = _merge_captioned_artifacts(page_artifacts, page_layout)
 
     artifacts: list[VisualArtifact] = []
     counters: dict[str, int] = {}
@@ -221,10 +289,25 @@ def _extract_page_artifacts(
             f"page-{page_layout.number:04d}-{artifact.kind}-"
             f"{counters[artifact.kind]:02d}"
         )
+
+        # A ruled table region is reconstructed into a Markdown pipe table from
+        # the glyph stream and drawn rules; on success it carries that grid and
+        # NO PNG crop is written (the table is emitted as text at its caption
+        # anchor). Figures and unreconstructable regions still crop to a PNG.
+        grid: TableGrid | None = None
+        if artifact.kind == "table":
+            grid = _reconstruct_table_grid(pdf_page, page_layout, artifact.bbox)
+
         asset_path = None
-        if output_dir is not None:
-            asset_path = str(output_dir / f"{artifact_id}.png")
-            _render_region(pdf_page, artifact.bbox.expand(4, page_layout), asset_path, dpi)
+        png_bytes = None
+        if grid is None:
+            crop = artifact.bbox.expand(4, page_layout)
+            if inline_images:
+                # Render to in-memory PNG bytes; write no file.
+                png_bytes = _render_region_bytes(pdf_page, crop, dpi)
+            elif output_dir is not None:
+                asset_path = str(output_dir / f"{artifact_id}.png")
+                _render_region(pdf_page, crop, asset_path, dpi)
         artifacts.append(
             VisualArtifact(
                 id=artifact_id,
@@ -236,6 +319,8 @@ def _extract_page_artifacts(
                 caption=artifact.caption,
                 score=artifact.score,
                 anchor_line_indices=artifact.anchor_line_indices,
+                table=grid,
+                png_bytes=png_bytes,
             )
         )
     return artifacts
@@ -393,67 +478,6 @@ def _caption_table_regions(page: PageLayout, captions: list[Caption]) -> list[Vi
     return regions
 
 
-def _equation_regions(
-    page: PageLayout,
-    *,
-    excluded_regions: list[VisualRegion] | None = None,
-) -> list[VisualRegion]:
-    excluded_bboxes = [region.bbox for region in (excluded_regions or [])]
-    lines = order_lines(page)
-    candidates = [
-        (index, line)
-        for index, line in enumerate(lines)
-        if _looks_like_display_equation_line(line, page)
-        and not any(_line_overlaps_bbox(line, bbox) for bbox in excluded_bboxes)
-    ]
-    if not candidates:
-        return []
-
-    clusters: list[list[tuple[int, Line]]] = []
-    current: list[tuple[int, Line]] = []
-    previous_line: Line | None = None
-    for item in candidates:
-        _, line = item
-        if previous_line is None or line.y_min - previous_line.y_max <= 18.0:
-            current.append(item)
-        else:
-            if current:
-                clusters.append(current)
-            current = [item]
-        previous_line = line
-    if current:
-        clusters.append(current)
-
-    regions: list[VisualRegion] = []
-    for cluster in clusters:
-        cluster_lines = [line for _, line in cluster]
-        bbox = _lines_bbox(cluster_lines)
-        text = " ".join(line.text for line in cluster_lines)
-        if len(cluster_lines) == 1 and not re.search(r"[=∑∏≤≥≈∈∀⊤]", text):
-            continue
-        if bbox.width < page.width * 0.12 or bbox.height < 6:
-            continue
-        if bbox.height > page.height * 0.18:
-            continue
-        bbox = BBox(
-            max(0.0, bbox.x0 - 24.0),
-            max(0.0, bbox.y0 - 3.0),
-            min(page.width, bbox.x1 + 72.0),
-            min(page.height, bbox.y1 + 3.0),
-        )
-        anchor = max(index for index, _ in cluster)
-        regions.append(
-            VisualRegion(
-                kind="equation",
-                source="equation",
-                page=page.number,
-                bbox=bbox,
-                anchor_line_indices=(anchor,),
-            )
-        )
-    return regions
-
-
 def write_artifacts_manifest(
     manifest_path: str | Path,
     *,
@@ -501,9 +525,9 @@ def _page_visual_regions(
 
     table_regions = _caption_table_regions(page, captions) + detect_text_table_regions(page)
     regions.extend(table_regions)
-    regions.extend(_equation_regions(page, excluded_regions=regions))
-    regions.extend(_caption_fallback_regions(page, captions, regions))
-    regions.extend(_display_list_text_regions(bboxlog, page, regions))
+    # Equations are reconstructed as LaTeX by mathreco, not cropped, so no
+    # equation/caption-fallback/display-list-text regions are produced here.
+    # Figures and tables remain image crops.
     return _dedupe_cross_kind_regions(_merge_regions(regions, page), page)
 
 
@@ -587,94 +611,6 @@ def _ruled_table_regions(
     return regions
 
 
-def _caption_fallback_regions(
-    page: PageLayout,
-    captions: list[Caption],
-    regions: list[VisualRegion],
-) -> list[VisualRegion]:
-    fallback: list[VisualRegion] = []
-    sorted_captions = sorted(captions, key=lambda caption: caption.bbox.y0)
-    for index, caption in enumerate(sorted_captions):
-        if _has_caption_attached_region(caption, regions, page):
-            continue
-
-        x0, x1 = _caption_column_bounds(page, caption)
-        if caption.kind == "figure":
-            y1 = max(0.0, caption.bbox.y0 - 4.0)
-            previous_caption_y = (
-                sorted_captions[index - 1].bbox.y1 + 6.0 if index > 0 else page.height * 0.08
-            )
-            y0 = max(previous_caption_y, y1 - page.height * 0.40)
-        else:
-            y0 = min(page.height, caption.bbox.y1 + 4.0)
-            next_caption_y = (
-                sorted_captions[index + 1].bbox.y0 - 6.0
-                if index + 1 < len(sorted_captions)
-                else page.height * 0.92
-            )
-            y1 = min(next_caption_y, y0 + page.height * 0.35)
-
-        bbox = BBox(x0, y0, x1, y1)
-        if _is_meaningful_region(bbox, page, recall=True):
-            fallback.append(
-                VisualRegion(
-                    kind=caption.kind,
-                    source="caption_fallback",
-                    page=page.number,
-                    bbox=bbox,
-                    anchor_line_indices=(max(caption.line_indices),),
-                )
-            )
-    return fallback
-
-
-def _display_list_text_regions(
-    entries: list[tuple[str, BBox]],
-    page: PageLayout,
-    regions: list[VisualRegion],
-) -> list[VisualRegion]:
-    text_bboxes = [
-        bbox
-        for operation, bbox in entries
-        if "text" in operation and _bbox_on_page(bbox, page)
-    ]
-    if not text_bboxes:
-        return []
-
-    candidates = _equation_regions(page, excluded_regions=[])
-    equation_bboxes = [candidate.bbox for candidate in candidates]
-    result: list[VisualRegion] = []
-    for bbox in _cluster_rects(
-        [bbox for bbox in text_bboxes if _overlaps_any(bbox, equation_bboxes, min_ratio=0.15)],
-        page,
-    ):
-        if _is_meaningful_region(bbox, page, recall=True):
-            result.append(
-                VisualRegion(
-                    kind="equation",
-                    source="bboxlog:text_equation",
-                    page=page.number,
-                    bbox=bbox,
-                )
-            )
-    return result
-
-
-def _has_caption_attached_region(
-    caption: Caption,
-    regions: list[VisualRegion],
-    page: PageLayout,
-) -> bool:
-    for region in regions:
-        if region.kind != caption.kind:
-            continue
-        if region.bbox.x_overlap_ratio(caption.bbox) < 0.08:
-            continue
-        if _vertical_gap(region.bbox, caption.bbox) <= max(96.0, page.height * 0.16):
-            return True
-    return False
-
-
 def _caption_column_bounds(page: PageLayout, caption: Caption) -> tuple[float, float]:
     if caption.bbox.width >= page.width * 0.42:
         return page.width * 0.06, page.width * 0.94
@@ -727,7 +663,7 @@ def _looks_like_table_rule_cluster(
 
 def _dedupe_cross_kind_regions(regions: list[VisualRegion], page: PageLayout) -> list[VisualRegion]:
     kept: list[VisualRegion] = []
-    priority = {"table": 3, "equation": 2, "figure": 1}
+    priority = {"table": 3, "figure": 1}
     for region in sorted(
         regions,
         key=lambda item: (
@@ -852,10 +788,7 @@ def _attach_captions(
 ) -> list[VisualArtifact]:
     artifacts: list[VisualArtifact] = []
     for region in regions:
-        if region.kind == "equation":
-            caption, score = None, 0.0
-        else:
-            caption, score = _nearest_caption(page, region, captions)
+        caption, score = _nearest_caption(page, region, captions)
         kind = region.kind
         if caption is not None:
             kind = caption.kind if caption.kind in {"figure", "table"} else kind
@@ -873,6 +806,53 @@ def _attach_captions(
             )
         )
     return artifacts
+
+
+def _merge_captioned_artifacts(
+    artifacts: list[VisualArtifact],
+    page: PageLayout,
+) -> list[VisualArtifact]:
+    groups: dict[tuple[int, str, Caption], list[VisualArtifact]] = {}
+    merged: list[VisualArtifact] = []
+    for artifact in artifacts:
+        if artifact.caption is None:
+            merged.append(artifact)
+            continue
+        key = (artifact.page, artifact.kind, artifact.caption)
+        groups.setdefault(key, []).append(artifact)
+
+    for members in groups.values():
+        if len(members) == 1:
+            merged.append(members[0])
+            continue
+        bbox = members[0].bbox
+        for member in members[1:]:
+            bbox = bbox.union(member.bbox)
+        sources: list[str] = []
+        for member in members:
+            if member.source not in sources:
+                sources.append(member.source)
+        anchor_line_indices: tuple[int, ...] = ()
+        for member in members:
+            if member.anchor_line_indices:
+                anchor_line_indices = member.anchor_line_indices
+                break
+        merged.append(
+            VisualArtifact(
+                id="",
+                kind=members[0].kind,
+                source="+".join(sources),
+                page=members[0].page,
+                bbox=bbox,
+                asset_path=None,
+                caption=members[0].caption,
+                score=min(member.score for member in members),
+                anchor_line_indices=anchor_line_indices,
+            )
+        )
+
+    merged.sort(key=lambda artifact: (artifact.bbox.y0, artifact.bbox.x0))
+    return merged
 
 
 def _nearest_caption(
@@ -924,6 +904,16 @@ def _render_region(pdf_page: Any, bbox: BBox, output_path: str, dpi: int) -> Non
     rect = fitz.Rect(bbox.x0, bbox.y0, bbox.x1, bbox.y1)
     pixmap = pdf_page.get_pixmap(matrix=fitz.Matrix(scale, scale), clip=rect, alpha=False)
     pixmap.save(output_path)
+
+
+def _render_region_bytes(pdf_page: Any, bbox: BBox, dpi: int) -> bytes:
+    """Render a region to in-memory PNG bytes (no file written)."""
+    import fitz  # type: ignore[import-not-found]
+
+    scale = dpi / 72.0
+    rect = fitz.Rect(bbox.x0, bbox.y0, bbox.x1, bbox.y1)
+    pixmap = pdf_page.get_pixmap(matrix=fitz.Matrix(scale, scale), clip=rect, alpha=False)
+    return pixmap.tobytes("png")
 
 
 def _normalize_caption_kind(kind: str) -> str:
@@ -1031,46 +1021,11 @@ def _looks_like_dense_table_line(line: Line) -> bool:
     return False
 
 
-def _line_overlaps_bbox(line: Line, bbox: BBox) -> bool:
-    x_overlap = max(0.0, min(line.x_max, bbox.x1) - max(line.x_min, bbox.x0))
-    y_overlap = max(0.0, min(line.y_max, bbox.y1) - max(line.y_min, bbox.y0))
-    if x_overlap <= 0 or y_overlap <= 0:
-        return False
-    return (
-        x_overlap / max(1.0, line.width) >= 0.5
-        and y_overlap / max(1.0, line.height) >= 0.5
-    )
-
-
 def _same_caption_column(page: PageLayout, caption: Caption, line: Line) -> bool:
     if caption.bbox.width >= page.width * 0.45:
         return True
     x0, x1 = _caption_column_bounds(page, caption)
     return x0 <= line.x_center <= x1
-
-
-def _looks_like_display_equation_line(line: Line, page: PageLayout) -> bool:
-    text = line.text.strip()
-    if not text or len(text) > 120:
-        return False
-    if CAPTION_RE.match(text):
-        return False
-    if text.lower().startswith(("where ", "therefore ", "assuming ")):
-        return False
-    if len(text) > 60 and len(text.split()) > 8:
-        return False
-
-    math_chars = set("=∑∏√≤≥≠≈∈∀∂∆△⊤⊥λγµσθΩωαβζ∞·±−∗")
-    math_count = sum(1 for char in text if char in math_chars)
-    compact = line.width <= page.width * 0.78
-    centered = line.x_min >= page.width * 0.08 and line.x_max <= page.width * 0.92
-    if math_count and compact and centered:
-        return True
-    if re.match(r"^(?:[A-Z]{1,3}|[ijkln]|[ijkln]=\d+|X|N[Bb])$", text):
-        return compact and centered
-    if re.match(r"^\(?\d+\)?$", text):
-        return False
-    return False
 
 
 def _split_table_cells(line: Line) -> list[str]:
@@ -1094,3 +1049,241 @@ def _split_table_cells(line: Line) -> list[str]:
     if gap_count == 0:
         return []
     return [" ".join(cell).strip() for cell in cells if cell]
+
+
+def _cluster_centers(values: list[float], tolerance: float = 2.0) -> list[float]:
+    """Collapse near-coincident rule centers into one center each.
+
+    A fully ruled grid often draws a rule as a doubled/over-stroked pair whose
+    centers fall within a point or two of each other; clustering keeps one
+    boundary per visual rule. Returns sorted cluster means.
+    """
+    if not values:
+        return []
+    ordered = sorted(values)
+    groups: list[list[float]] = [[ordered[0]]]
+    for value in ordered[1:]:
+        if value - groups[-1][-1] <= tolerance:
+            groups[-1].append(value)
+        else:
+            groups.append([value])
+    return [sum(group) / len(group) for group in groups]
+
+
+def _region_ruled_grid(
+    pdf_page: Any,
+    region: BBox,
+) -> tuple[list[float], list[float]]:
+    """Recover horizontal- and vertical-rule centers inside a table region.
+
+    The decisive geometry of a born-digital ruled table lives in the page's
+    ``get_bboxlog()`` ``path`` entries, which carry the actual stroke thickness
+    (``get_drawings`` reports the same rules as zero-area rects). Rules are
+    classified by REGION-RELATIVE length so a short cell-tall vertical rule is
+    not rejected by a page-relative threshold (the reason ``_is_rule_piece``
+    cannot be reused here). Returns ``(h_centers, v_centers)``: ``h_centers`` are
+    horizontal-rule y-centers (row boundaries), ``v_centers`` are vertical-rule
+    x-centers (column boundaries), each sorted and clustered within 2pt.
+    """
+    region_width = max(1.0, region.width)
+    region_height = max(1.0, region.height)
+    margin = 3.0
+    h_centers: list[float] = []
+    v_centers: list[float] = []
+    for operation, bbox in _bboxlog_entries(pdf_page):
+        if "path" not in operation:
+            continue
+        cx = (bbox.x0 + bbox.x1) / 2.0
+        cy = (bbox.y0 + bbox.y1) / 2.0
+        if not (
+            region.x0 - margin <= cx <= region.x1 + margin
+            and region.y0 - margin <= cy <= region.y1 + margin
+        ):
+            continue
+        if bbox.height <= 2.5 and bbox.width >= 0.30 * region_width:
+            h_centers.append(cy)
+        elif bbox.width <= 2.5 and bbox.height >= 0.15 * region_height:
+            v_centers.append(cx)
+    return _cluster_centers(h_centers), _cluster_centers(v_centers)
+
+
+def _gap_column_edges(words_by_row: list[list[Any]], region: BBox) -> list[float]:
+    """Booktabs fallback: derive column edges from shared large inter-word gaps.
+
+    For each row, find inter-word gaps wide enough to separate columns (the same
+    ``max(14, 4*char_width)`` style ``_split_table_cells`` uses) and record each
+    gap midpoint. Midpoints that recur (within a tolerance) across at least 60%
+    of the rows are internal column edges; the region's left and right edges
+    bound the outer columns. Used only when no vertical rules are drawn.
+    """
+    if not words_by_row:
+        return []
+    gap_midpoints: list[float] = []
+    row_count = 0
+    for words in words_by_row:
+        ordered = sorted(words, key=lambda word: word.x_min)
+        if len(ordered) < 2:
+            continue
+        row_count += 1
+        widths = [
+            word.width / max(1, len(word.text)) for word in ordered if word.width > 0
+        ]
+        char_width = median(widths) if widths else 5.0
+        threshold = max(14.0, char_width * 4.0)
+        for previous, current in zip(ordered, ordered[1:]):
+            gap = current.x_min - previous.x_max
+            if gap >= threshold:
+                gap_midpoints.append((previous.x_max + current.x_min) / 2.0)
+    if row_count == 0:
+        return []
+
+    clusters = _cluster_centers(gap_midpoints, tolerance=8.0)
+    tolerance = 8.0
+    internal: list[float] = []
+    for center in clusters:
+        support = sum(
+            1 for midpoint in gap_midpoints if abs(midpoint - center) <= tolerance
+        )
+        if support >= max(2, int(row_count * 0.6 + 0.999)):
+            internal.append(center)
+    if not internal:
+        return []
+    return [region.x0] + sorted(internal) + [region.x1]
+
+
+def _join_cell_words(words: list[tuple[int, float, str]]) -> str:
+    """Join a cell's words in reading order with hyphen-wrap repair.
+
+    ``words`` are ``(text_line_y, x_min, text)`` tuples. Sorting by text-line y
+    then x keeps a wrapped multi-line cell in reading order (ordering by pure x
+    interleaves the lines). When a text line ends with a hyphen and the next
+    word starts lowercase, the hyphen is dropped and the words are concatenated
+    -- the same repair ``markdown._join_paragraph`` applies to broken prose
+    (e.g. ``activa-`` + ``tion`` -> ``activation``).
+    """
+    ordered = sorted(words, key=lambda item: (item[0], item[1]))
+    result = ""
+    for _, _, text in ordered:
+        token = text
+        if not result:
+            result = token
+            continue
+        if result.endswith("-") and token[:1].islower():
+            result = result[:-1] + token
+            continue
+        separator = "" if _touching_cjk(result, token) else " "
+        result += separator + token
+    return normalize_line_text(result).strip()
+
+
+def _touching_cjk(left: str, right: str) -> bool:
+    if not left or not right:
+        return False
+    return _is_cjk(left[-1]) or _is_cjk(right[0])
+
+
+def _is_cjk(char: str) -> bool:
+    return (
+        "぀" <= char <= "ヿ"
+        or "㐀" <= char <= "䶿"
+        or "一" <= char <= "鿿"
+        or "豈" <= char <= "﫿"
+    )
+
+
+def _row_band_for(cy: float, h_centers: list[float]) -> int | None:
+    for i in range(len(h_centers) - 1):
+        if h_centers[i] - 1.0 <= cy < h_centers[i + 1] + 1.0:
+            return i
+    return None
+
+
+def _column_for(cx: float, edges: list[float]) -> int | None:
+    for j in range(len(edges) - 1):
+        if edges[j] - 1.0 <= cx < edges[j + 1] + 1.0:
+            return j
+    return None
+
+
+def _reconstruct_table_grid(
+    pdf_page: Any,
+    page_layout: PageLayout,
+    region: BBox,
+) -> TableGrid | None:
+    """Reconstruct a detected table region into a row x column cell matrix.
+
+    Deterministic and ML-free: row boundaries come from horizontal drawn rules
+    (a tall band is a wrapped multi-line cell-row, kept as one logical row),
+    column boundaries from vertical drawn rules (primary path) or, when none are
+    drawn, shared inter-word gaps (booktabs fallback). Every word whose center
+    lies in the region is assigned to exactly one (row, column) cell; cell words
+    are joined in reading order with hyphen-wrap repair. The row(s) above the
+    under-header rule (the 2nd horizontal rule) are the header.
+
+    Returns ``None`` only when no horizontal rules are found (not a ruled table
+    region); a region with rules but fewer than 2 recoverable columns raises a
+    defect rather than silently degrading.
+    """
+    h_centers, v_centers = _region_ruled_grid(pdf_page, region)
+    if len(h_centers) < 2:
+        return None
+
+    nrows = len(h_centers) - 1
+
+    region_words: list[Any] = []
+    for line in page_layout.lines:
+        for word in line.words:
+            if not word.text:
+                continue
+            cy = (word.y_min + word.y_max) / 2.0
+            if _row_band_for(cy, h_centers) is None:
+                continue
+            cx = (word.x_min + word.x_max) / 2.0
+            if not (region.x0 - 1.0 <= cx <= region.x1 + 1.0):
+                continue
+            region_words.append(word)
+
+    if len(v_centers) >= 2:
+        column_edges = v_centers
+    else:
+        words_by_row: list[list[Any]] = [[] for _ in range(nrows)]
+        for word in region_words:
+            row = _row_band_for((word.y_min + word.y_max) / 2.0, h_centers)
+            if row is not None:
+                words_by_row[row].append(word)
+        column_edges = _gap_column_edges(words_by_row, region)
+        if len(column_edges) < 2:
+            raise RuntimeError(
+                "table reconstruction defect: region "
+                f"{region.to_json()} on page {page_layout.number} has horizontal "
+                "rules but no recoverable column structure (neither vertical "
+                "rules nor shared inter-word gaps)"
+            )
+
+    ncols = len(column_edges) - 1
+    cells: dict[tuple[int, int], list[tuple[int, float, str]]] = {}
+    for word in region_words:
+        cy = (word.y_min + word.y_max) / 2.0
+        cx = (word.x_min + word.x_max) / 2.0
+        row = _row_band_for(cy, h_centers)
+        col = _column_for(cx, column_edges)
+        if row is None or col is None:
+            continue
+        cells.setdefault((row, col), []).append(
+            (round(word.y_min), word.x_min, word.text)
+        )
+
+    matrix: list[tuple[str, ...]] = []
+    for row in range(nrows):
+        matrix.append(
+            tuple(
+                _join_cell_words(cells.get((row, col), []))
+                for col in range(ncols)
+            )
+        )
+
+    # The under-header rule is the 2nd clustered horizontal rule, so the single
+    # band above it (row 0) is the header. A region with only one band has no
+    # header.
+    header_rows = 1 if nrows >= 1 else 0
+    return TableGrid(matrix=tuple(matrix), header_rows=header_rows, ncols=ncols)

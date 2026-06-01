@@ -93,6 +93,25 @@ def build_parser() -> argparse.ArgumentParser:
         help="DPI for extracted figure/table/equation crops.",
     )
     parser.add_argument(
+        "--math",
+        choices=("on", "off"),
+        default="on",
+        help=(
+            "Equation handling: 'on' reconstructs deterministic LaTeX from the "
+            "PDF glyph stream (display math as fenced math blocks, inline math as "
+            "$...$); 'off' uses the legacy character-heuristic path."
+        ),
+    )
+    parser.add_argument(
+        "--inline-images",
+        action="store_true",
+        help=(
+            "Embed figure images directly in the Markdown as base64 data URIs so "
+            "the .md is a self-contained single file, instead of linking to "
+            "external files in the assets directory."
+        ),
+    )
+    parser.add_argument(
         "--jobs",
         type=int,
         default=0,
@@ -138,7 +157,9 @@ def main(argv: list[str] | None = None) -> int:
     manifest_path = args.manifest
     asset_base_dir = args.output.parent if args.output else Path.cwd()
     if artifact_mode != "off":
-        if assets_dir is None:
+        # In inline mode figures embed as base64 in the .md; no assets dir is
+        # created or needed, so do not auto-derive one.
+        if assets_dir is None and not args.inline_images:
             assets_dir = (
                 args.output.parent / f"{args.output.stem}_assets"
                 if args.output
@@ -166,6 +187,8 @@ def main(argv: list[str] | None = None) -> int:
         asset_base_dir=asset_base_dir,
         artifact_dpi=args.artifact_dpi,
         jobs=args.jobs,
+        math=args.math,
+        inline_images=args.inline_images,
     )
 
     try:
