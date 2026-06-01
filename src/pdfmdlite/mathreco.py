@@ -20,12 +20,16 @@ The font *family* encodes style (CMBX -> ``\\mathbf``; CMMI -> bare math italic;
 CMR -> upright, coalesced into ``\\mathrm`` runs; CMSY -> symbols; CMEX -> large
 operators; MSAM/MSBM -> AMS and blackboard). An unhandled glyph raises
 :class:`MathRecoUnhandled` -- by the project contract that is a *defect* to fix
-with a new table entry, never a silent drop nor an image fallback.
+with a new table entry. :func:`reconstruct_math` isolates such a failure to the
+single equation (left as its source text, with a warning for display math) so
+one missing glyph never aborts the whole document; it is never silently
+downgraded to an image fallback.
 """
 
 from __future__ import annotations
 
 import re
+import warnings
 from dataclasses import dataclass
 from statistics import median
 from typing import Any
@@ -43,8 +47,10 @@ UNDERBRACE_MARKER = "\\underbrace"
 class MathRecoUnhandled(Exception):
     """A glyph could not be resolved to a LaTeX token.
 
-    Per the project contract this is a DEFECT to fix (add a table entry), never
-    a reason to silently drop content or fall back to an image crop.
+    Per the project contract this is a DEFECT to fix (add a table entry).
+    :func:`reconstruct_math` catches it per equation so one unhandled glyph does
+    not abort the whole document: the affected equation is left as its source
+    text (display math also emits a warning), never replaced by an image crop.
     """
 
     def __init__(self, font: str, gid: int, char: str) -> None:
@@ -1352,7 +1358,17 @@ def _detect_display_regions(
         y0 = min(g.y0 for g in glyphs)
         y1 = max(g.y1 for g in glyphs)
         region_rules = [r for r in rules if y0 - 6.0 <= r.ycenter <= y1 + 6.0]
-        latex = recognize_latex(glyphs, region_rules)
+        try:
+            latex = recognize_latex(glyphs, region_rules)
+        except MathRecoUnhandled as exc:
+            # An unhandled glyph is a recogniser defect, but it must not abort
+            # the whole document: leave this one equation as its source text (it
+            # is not suppressed downstream) and surface the gap loudly.
+            warnings.warn(
+                f"page {page_number}: display equation left un-reconstructed ({exc})",
+                stacklevel=2,
+            )
+            continue
         if not latex:
             continue
         bbox = BBox(
@@ -1395,7 +1411,12 @@ def _detect_inline_regions(
                 for g in run_glyphs
             ):
                 return
-            latex = recognize_latex(run_glyphs, [])
+            try:
+                latex = recognize_latex(run_glyphs, [])
+            except MathRecoUnhandled:
+                # A speculative inline run that hits an unhandled glyph is simply
+                # not inline math; leave the glyphs as text rather than crashing.
+                return
             if not latex:
                 return
             bbox = BBox(

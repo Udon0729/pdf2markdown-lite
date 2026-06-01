@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from statistics import median
 
@@ -112,14 +113,65 @@ class DocumentLayout:
     pages: list[PageLayout]
 
 
+# PDF word extraction often inserts spaces between CJK glyph runs; collapse them.
+_CJK_RANGE = "\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff"
+_CJK_JOIN_RE = re.compile(rf"([{_CJK_RANGE}])\s+([{_CJK_RANGE}])")
+
+
 def normalize_line_text(text: str) -> str:
     text = " ".join(text.replace("\u00ad", "").split())
-    cjk = "\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff"
-    # PDF word extraction often inserts spaces between CJK glyph runs.
-    import re
+    return _CJK_JOIN_RE.sub(r"\1\2", text)
 
-    text = re.sub(rf"([{cjk}])\s+([{cjk}])", r"\1\2", text)
-    return text
+
+def is_cjk(char: str) -> bool:
+    """True for a CJK ideograph or kana codepoint (joined without spacing)."""
+    return (
+        "\u3040" <= char <= "\u30ff"
+        or "\u3400" <= char <= "\u4dbf"
+        or "\u4e00" <= char <= "\u9fff"
+        or "\u8c48" <= char <= "\ufaff"
+    )
+
+
+def touching_cjk(left: str, right: str) -> bool:
+    """True if a join boundary is CJK on either side, so no space is inserted."""
+    if not left or not right:
+        return False
+    return is_cjk(left[-1]) or is_cjk(right[0])
+
+
+def split_table_cells(line: Line, normalize: bool = False) -> list[str]:
+    """Split a line into table cells on large inter-word gaps.
+
+    Returns ``[]`` when the line has fewer than 3 words or no gap wide enough to
+    be a column boundary. ``normalize`` runs each cell through
+    :func:`normalize_line_text` (the Markdown renderer needs clean cell text; the
+    artifact detector only needs the cell count, so it leaves the text raw).
+    """
+    words = sorted(line.words, key=lambda word: word.x_min)
+    if len(words) < 3:
+        return []
+
+    widths = [word.width / max(1, len(word.text)) for word in words if word.width > 0]
+    char_width = median(widths) if widths else 5.0
+    threshold = max(14.0, char_width * 4.0)
+
+    cells: list[list[str]] = [[words[0].text]]
+    large_gap_count = 0
+    for previous, current in zip(words, words[1:]):
+        gap = current.x_min - previous.x_max
+        if gap >= threshold:
+            large_gap_count += 1
+            cells.append([current.text])
+        else:
+            cells[-1].append(current.text)
+
+    if large_gap_count == 0:
+        return []
+    joined = (" ".join(cell) for cell in cells if cell)
+    if normalize:
+        return [normalize_line_text(text).strip() for text in joined]
+    return [text.strip() for text in joined]
 
 
 def remove_repeating_marginalia(pages: list[PageLayout]) -> None:

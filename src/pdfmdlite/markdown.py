@@ -7,7 +7,13 @@ from pathlib import Path
 from statistics import median
 from typing import Any
 
-from .layout import Line, PageLayout, normalize_line_text
+from .layout import (
+    Line,
+    PageLayout,
+    normalize_line_text,
+    split_table_cells,
+    touching_cjk,
+)
 
 LIST_RE = re.compile(
     r"^\s*((?:[-*+•◦▪●])|(?:\(?\d+[\).])|(?:\(?[A-Za-z][\).])|(?:[IVXLCM]+[\).]))\s+"
@@ -191,6 +197,12 @@ def _render_page(
             anchor = max(positions)
             inline_by_anchor.setdefault(anchor, []).append(region)
 
+    # A line reconstructed as LaTeX or covered by an artifact must not be eaten
+    # into a gap-detected table by the scanner below, which would drop its math
+    # block / crop and leak its glyph fragments as bogus cells. The scanner
+    # stops at any such line.
+    table_blocked = frozenset(math_suppressed).union(suppressed_line_indices)
+
     def emit_display_math(line_index: int) -> None:
         for latex in display_by_anchor.get(line_index, []):
             flush_paragraph()
@@ -246,7 +258,7 @@ def _render_page(
             continue
 
         if detect_tables:
-            table, consumed = _try_render_table(lines, index)
+            table, consumed = _try_render_table(lines, index, table_blocked)
             if table:
                 flush_paragraph()
                 flush_formula()
@@ -376,7 +388,7 @@ def _heading_level(line: Line, median_word_height: float) -> int:
         return 0
 
     ratio = line.median_word_height / median_word_height if median_word_height else 1.0
-    numbered_heading = re.match(r"^\d+(?:\.\d+)*\s+\S+", text) is not None
+    numbered_heading = re.match(r"^\d+(?:\.\d+)*\.?\s+\S+", text) is not None
     short_title = len(text) <= 80 and len(text.split()) <= 12
 
     if ratio >= 1.65 and short_title:
@@ -471,7 +483,7 @@ def _join_heading_pieces(pieces: list[str]) -> str:
         if result.endswith("-"):
             result = result[:-1] + next_text
             continue
-        separator = "" if _touching_cjk(result, next_text) else " "
+        separator = "" if touching_cjk(result, next_text) else " "
         result += separator + next_text
     return result
 
@@ -598,13 +610,17 @@ def _normalize_list_item(text: str) -> str:
     return f"{marker} {rest}"
 
 
-def _try_render_table(lines: list[Line], start: int) -> tuple[str | None, int]:
+def _try_render_table(
+    lines: list[Line], start: int, blocked: frozenset[int] = frozenset()
+) -> tuple[str | None, int]:
     rows: list[list[str]] = []
     consumed = 0
     expected_cells = 0
 
-    for line in lines[start : start + 20]:
-        cells = _split_table_cells(line)
+    for offset, line in enumerate(lines[start : start + 20]):
+        if start + offset in blocked:
+            break
+        cells = split_table_cells(line, normalize=True)
         if len(cells) < 2:
             break
         if expected_cells and abs(len(cells) - expected_cells) > 1:
@@ -630,30 +646,6 @@ def _try_render_table(lines: list[Line], start: int) -> tuple[str | None, int]:
     for row in body:
         table_lines.append("| " + " | ".join(_escape_cell(cell) for cell in row) + " |")
     return "\n".join(table_lines), consumed
-
-
-def _split_table_cells(line: Line) -> list[str]:
-    words = sorted(line.words, key=lambda word: word.x_min)
-    if len(words) < 3:
-        return []
-
-    widths = [word.width / max(1, len(word.text)) for word in words if word.width > 0]
-    char_width = median(widths) if widths else 5.0
-    threshold = max(14.0, char_width * 4.0)
-
-    cells: list[list[str]] = [[words[0].text]]
-    large_gap_count = 0
-    for previous, current in zip(words, words[1:]):
-        gap = current.x_min - previous.x_max
-        if gap >= threshold:
-            large_gap_count += 1
-            cells.append([current.text])
-        else:
-            cells[-1].append(current.text)
-
-    if large_gap_count == 0:
-        return []
-    return [normalize_line_text(" ".join(cell)).strip() for cell in cells if cell]
 
 
 def _escape_cell(text: str) -> str:
@@ -705,24 +697,9 @@ def _join_paragraph(lines: list[str]) -> str:
         if result.endswith("-") and next_text[:1].islower():
             result = result[:-1] + next_text
             continue
-        separator = "" if _touching_cjk(result, next_text) else " "
+        separator = "" if touching_cjk(result, next_text) else " "
         result += separator + next_text
     return result
-
-
-def _touching_cjk(left: str, right: str) -> bool:
-    if not left or not right:
-        return False
-    return _is_cjk(left[-1]) or _is_cjk(right[0])
-
-
-def _is_cjk(char: str) -> bool:
-    return (
-        "\u3040" <= char <= "\u30ff"
-        or "\u3400" <= char <= "\u4dbf"
-        or "\u4e00" <= char <= "\u9fff"
-        or "\uf900" <= char <= "\ufaff"
-    )
 
 
 def _document_median_word_height(pages: list[PageLayout]) -> float:

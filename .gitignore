@@ -25,16 +25,13 @@ work/
 
 # --- Generated converter output at the repo root ---
 # The CLI writes <name>.md, <name>.artifacts.json and <name>_assets/ next to the
-# output path. Ignore generated copies, but keep the committed sample output
-# (output.*) and the project docs (README.md, CLAUDE.md).
+# output path. Ignore all generated output; keep only the project docs.
 /*.md
 !/README.md
+!/README.ja.md
 !/CLAUDE.md
-!/output.md
 /*.artifacts.json
-!/output.artifacts.json
 /*_assets/
-!/output_assets/
 
 # Local test input PDFs (papers) are not part of the repository.
 /*.pdf

@@ -9,7 +9,13 @@ from pathlib import Path
 from statistics import median
 from typing import Any
 
-from .layout import Line, PageLayout, normalize_line_text
+from .layout import (
+    Line,
+    PageLayout,
+    normalize_line_text,
+    split_table_cells,
+    touching_cjk,
+)
 from .markdown import order_lines
 
 CAPTION_RE = re.compile(
@@ -220,7 +226,10 @@ def extract_artifacts(
                 artifacts.extend(page_artifacts)
         artifacts.sort(key=lambda artifact: (artifact.page, artifact.bbox.y0, artifact.bbox.x0))
 
-    if output_dir is not None:
+    # Inline mode writes no crop files and may not have created output_dir, so
+    # pruning would either delete a user's pre-existing PNGs (keep is empty) or
+    # raise on a missing directory. Only prune dirs this run actually wrote to.
+    if output_dir is not None and not inline_images and output_dir.is_dir():
         _prune_stale_crops(output_dir, artifacts)
     return artifacts
 
@@ -240,7 +249,7 @@ def _prune_stale_crops(output_dir: Path, artifacts: list[VisualArtifact]) -> Non
         for artifact in artifacts
         if artifact.asset_path
     }
-    crop_name = re.compile(r"^page-\d{4}-[a-z]+-\d{2}\.png$")
+    crop_name = re.compile(r"^page-\d{4,}-[a-z]+-\d+\.png$")
     for entry in output_dir.iterdir():
         if not entry.is_file():
             continue
@@ -296,7 +305,13 @@ def _extract_page_artifacts(
         # anchor). Figures and unreconstructable regions still crop to a PNG.
         grid: TableGrid | None = None
         if artifact.kind == "table":
-            grid = _reconstruct_table_grid(pdf_page, page_layout, artifact.bbox)
+            try:
+                grid = _reconstruct_table_grid(pdf_page, page_layout, artifact.bbox)
+            except RuntimeError:
+                # A region accepted as a ruled table whose grid cannot be
+                # recovered falls back to a PNG crop (the documented behaviour
+                # for unreconstructable regions); it must not abort the run.
+                grid = None
 
         asset_path = None
         png_bytes = None
@@ -395,7 +410,7 @@ def detect_text_table_regions(page: PageLayout) -> list[VisualRegion]:
         row_lines: list[Line] = []
         expected_cells = 0
         for line in lines[index : index + 40]:
-            cells = _split_table_cells(line)
+            cells = split_table_cells(line)
             if len(cells) < 2:
                 break
             if expected_cells and abs(len(cells) - expected_cells) > 1:
@@ -1001,14 +1016,6 @@ def _overlap_area(first: BBox, second: BBox) -> float:
     return x_overlap * y_overlap
 
 
-def _overlaps_any(bbox: BBox, others: list[BBox], *, min_ratio: float) -> bool:
-    for other in others:
-        overlap = _overlap_area(bbox, other)
-        if overlap / max(1.0, min(bbox.area, other.area)) >= min_ratio:
-            return True
-    return False
-
-
 def _looks_like_dense_table_line(line: Line) -> bool:
     digit_count = sum(any(char.isdigit() for char in word.text) for word in line.words)
     small_text = line.median_word_height <= 8.5
@@ -1026,29 +1033,6 @@ def _same_caption_column(page: PageLayout, caption: Caption, line: Line) -> bool
         return True
     x0, x1 = _caption_column_bounds(page, caption)
     return x0 <= line.x_center <= x1
-
-
-def _split_table_cells(line: Line) -> list[str]:
-    words = sorted(line.words, key=lambda word: word.x_min)
-    if len(words) < 3:
-        return []
-
-    widths = [word.width / max(1, len(word.text)) for word in words if word.width > 0]
-    char_width = median(widths) if widths else 5.0
-    threshold = max(14.0, char_width * 4.0)
-
-    cells: list[list[str]] = [[words[0].text]]
-    gap_count = 0
-    for previous, current in zip(words, words[1:]):
-        gap = current.x_min - previous.x_max
-        if gap >= threshold:
-            gap_count += 1
-            cells.append([current.text])
-        else:
-            cells[-1].append(current.text)
-    if gap_count == 0:
-        return []
-    return [" ".join(cell).strip() for cell in cells if cell]
 
 
 def _cluster_centers(values: list[float], tolerance: float = 2.0) -> list[float]:
@@ -1111,7 +1095,7 @@ def _gap_column_edges(words_by_row: list[list[Any]], region: BBox) -> list[float
     """Booktabs fallback: derive column edges from shared large inter-word gaps.
 
     For each row, find inter-word gaps wide enough to separate columns (the same
-    ``max(14, 4*char_width)`` style ``_split_table_cells`` uses) and record each
+    ``max(14, 4*char_width)`` style ``split_table_cells`` uses) and record each
     gap midpoint. Midpoints that recur (within a tolerance) across at least 60%
     of the rows are internal column edges; the region's left and right edges
     bound the outer columns. Used only when no vertical rules are drawn.
@@ -1171,24 +1155,9 @@ def _join_cell_words(words: list[tuple[int, float, str]]) -> str:
         if result.endswith("-") and token[:1].islower():
             result = result[:-1] + token
             continue
-        separator = "" if _touching_cjk(result, token) else " "
+        separator = "" if touching_cjk(result, token) else " "
         result += separator + token
     return normalize_line_text(result).strip()
-
-
-def _touching_cjk(left: str, right: str) -> bool:
-    if not left or not right:
-        return False
-    return _is_cjk(left[-1]) or _is_cjk(right[0])
-
-
-def _is_cjk(char: str) -> bool:
-    return (
-        "぀" <= char <= "ヿ"
-        or "㐀" <= char <= "䶿"
-        or "一" <= char <= "鿿"
-        or "豈" <= char <= "﫿"
-    )
 
 
 def _row_band_for(cy: float, h_centers: list[float]) -> int | None:
@@ -1285,5 +1254,5 @@ def _reconstruct_table_grid(
     # The under-header rule is the 2nd clustered horizontal rule, so the single
     # band above it (row 0) is the header. A region with only one band has no
     # header.
-    header_rows = 1 if nrows >= 1 else 0
+    header_rows = 1 if nrows >= 2 else 0
     return TableGrid(matrix=tuple(matrix), header_rows=header_rows, ncols=ncols)

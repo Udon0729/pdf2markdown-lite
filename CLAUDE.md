@@ -43,4 +43,4 @@ Most behavior worth changing is in two files of geometry heuristics, not in extr
 - `--jobs 0` (default) runs serially under 16 pages, else fans out via `ProcessPoolExecutor` (`_effective_render_jobs`). Worker tasks re-open the PDF per process.
 - Public API surface (`__init__.py`): `convert_pdf`, `convert_pdf_to_result`, `ConversionOptions`, `ConversionResult`. The CLI is a thin wrapper that maps argparse flags onto `ConversionOptions`.
 - `pyproject.toml` requires Python ≥3.10; `.python-version` pins 3.12.
-- `output.md`, `output.artifacts.json`, and `output_assets/` at the repo root are committed **sample output**, not source.
+- Generated converter output at the repo root (`*.md` except the docs, `*.artifacts.json`, `*_assets/`) is git-ignored and not committed.
