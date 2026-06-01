@@ -1,5 +1,7 @@
 # pdfmdlite
 
+> 日本語版: [README.ja.md](README.ja.md)
+
 `pdfmdlite` is a CPU-only PDF → Markdown converter for papers and long technical documents. It reads the PDF's own glyph stream (text, fonts, coordinates) and drawn vector geometry, and reconstructs **structured** Markdown from it — without a GPU, an LLM, or any ML model.
 
 Its distinguishing feature is that it does not flatten everything to images:
