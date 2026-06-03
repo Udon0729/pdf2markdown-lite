@@ -31,6 +31,7 @@ from __future__ import annotations
 import re
 import warnings
 from dataclasses import dataclass
+from functools import lru_cache
 from statistics import median
 from typing import Any
 
@@ -171,6 +172,7 @@ ACCENT: dict[int, str] = {
 MATH_FONT_PREFIXES = ("CM", "MSAM", "MSBM")
 
 
+@lru_cache(maxsize=256)
 def font_family(font: str) -> str:
     """Strip a font name down to its identifying family prefix.
 
@@ -188,6 +190,7 @@ def is_math_font(font: str) -> bool:
     return family.startswith(MATH_FONT_PREFIXES)
 
 
+@lru_cache(maxsize=256)
 def _font_prefix(font: str) -> str:
     """The CM-style alphabetic family prefix (e.g. 'CMSY' from 'CMSY10')."""
     family = font_family(font)
@@ -195,6 +198,7 @@ def _font_prefix(font: str) -> str:
     return match.group(1) if match else family
 
 
+@lru_cache(maxsize=512)
 def style_for(font: str, flags: int) -> str:
     """Resolve the LaTeX wrapper style for a glyph's font/flags.
 

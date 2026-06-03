@@ -286,7 +286,11 @@ def _extract_page_artifacts(
     inline_images: bool = False,
 ) -> list[VisualArtifact]:
     captions = detect_captions(page_layout)
-    regions = _page_visual_regions(pdf_page, page_layout, captions)
+    # Harvest the page's drawn-path log once and thread it into both region
+    # detection and per-table grid reconstruction (each otherwise re-runs the
+    # get_bboxlog() C call and re-parses every path on the page).
+    bboxlog = _bboxlog_entries(pdf_page)
+    regions = _page_visual_regions(pdf_page, page_layout, captions, bboxlog)
     page_artifacts = _attach_captions(page_layout, regions, captions)
     page_artifacts = _merge_captioned_artifacts(page_artifacts, page_layout)
 
@@ -306,7 +310,9 @@ def _extract_page_artifacts(
         grid: TableGrid | None = None
         if artifact.kind == "table":
             try:
-                grid = _reconstruct_table_grid(pdf_page, page_layout, artifact.bbox)
+                grid = _reconstruct_table_grid(
+                    pdf_page, page_layout, artifact.bbox, bboxlog
+                )
             except RuntimeError:
                 # A region accepted as a ruled table whose grid cannot be
                 # recovered falls back to a PNG crop (the documented behaviour
@@ -402,8 +408,11 @@ def detect_captions(page: PageLayout) -> list[Caption]:
     return captions
 
 
-def detect_text_table_regions(page: PageLayout) -> list[VisualRegion]:
-    lines = order_lines(page)
+def detect_text_table_regions(
+    page: PageLayout, lines: list[Line] | None = None
+) -> list[VisualRegion]:
+    if lines is None:
+        lines = order_lines(page)
     regions: list[VisualRegion] = []
     index = 0
     while index < len(lines):
@@ -433,12 +442,15 @@ def detect_text_table_regions(page: PageLayout) -> list[VisualRegion]:
     return regions
 
 
-def _caption_table_regions(page: PageLayout, captions: list[Caption]) -> list[VisualRegion]:
+def _caption_table_regions(
+    page: PageLayout, captions: list[Caption], lines: list[Line] | None = None
+) -> list[VisualRegion]:
     table_captions = [caption for caption in captions if caption.kind == "table"]
     if not table_captions:
         return []
 
-    lines = order_lines(page)
+    if lines is None:
+        lines = order_lines(page)
     regions: list[VisualRegion] = []
     sorted_captions = sorted(table_captions, key=lambda caption: caption.bbox.y0)
 
@@ -513,6 +525,7 @@ def _page_visual_regions(
     pdf_page: Any,
     page: PageLayout,
     captions: list[Caption],
+    bboxlog: list[tuple[str, BBox]] | None = None,
 ) -> list[VisualRegion]:
     regions: list[VisualRegion] = []
 
@@ -520,7 +533,8 @@ def _page_visual_regions(
         if _is_meaningful_region(bbox, page, recall=True):
             regions.append(VisualRegion(kind="figure", source="image", page=page.number, bbox=bbox))
 
-    bboxlog = _bboxlog_entries(pdf_page)
+    if bboxlog is None:
+        bboxlog = _bboxlog_entries(pdf_page)
     bboxlog_regions, ruled_rects = _bboxlog_visual_regions(bboxlog, page)
     regions.extend(bboxlog_regions)
     regions.extend(_ruled_table_regions(ruled_rects, page, captions))
@@ -538,7 +552,10 @@ def _page_visual_regions(
                 VisualRegion(kind=kind, source="drawing", page=page.number, bbox=bbox)
             )
 
-    table_regions = _caption_table_regions(page, captions) + detect_text_table_regions(page)
+    ordered_lines = order_lines(page)
+    table_regions = _caption_table_regions(
+        page, captions, ordered_lines
+    ) + detect_text_table_regions(page, ordered_lines)
     regions.extend(table_regions)
     # Equations are reconstructed as LaTeX by mathreco, not cropped, so no
     # equation/caption-fallback/display-list-text regions are produced here.
@@ -1057,6 +1074,7 @@ def _cluster_centers(values: list[float], tolerance: float = 2.0) -> list[float]
 def _region_ruled_grid(
     pdf_page: Any,
     region: BBox,
+    bboxlog: list[tuple[str, BBox]] | None = None,
 ) -> tuple[list[float], list[float]]:
     """Recover horizontal- and vertical-rule centers inside a table region.
 
@@ -1074,7 +1092,9 @@ def _region_ruled_grid(
     margin = 3.0
     h_centers: list[float] = []
     v_centers: list[float] = []
-    for operation, bbox in _bboxlog_entries(pdf_page):
+    if bboxlog is None:
+        bboxlog = _bboxlog_entries(pdf_page)
+    for operation, bbox in bboxlog:
         if "path" not in operation:
             continue
         cx = (bbox.x0 + bbox.x1) / 2.0
@@ -1178,6 +1198,7 @@ def _reconstruct_table_grid(
     pdf_page: Any,
     page_layout: PageLayout,
     region: BBox,
+    bboxlog: list[tuple[str, BBox]] | None = None,
 ) -> TableGrid | None:
     """Reconstruct a detected table region into a row x column cell matrix.
 
@@ -1193,7 +1214,7 @@ def _reconstruct_table_grid(
     region); a region with rules but fewer than 2 recoverable columns raises a
     defect rather than silently degrading.
     """
-    h_centers, v_centers = _region_ruled_grid(pdf_page, region)
+    h_centers, v_centers = _region_ruled_grid(pdf_page, region, bboxlog)
     if len(h_centers) < 2:
         return None
 
