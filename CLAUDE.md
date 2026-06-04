@@ -12,10 +12,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 uv sync --no-editable                                    # install/build into .venv
 uv run --no-editable pdfmdlite input.pdf -o output.md    # run the CLI (also: python -m pdfmdlite)
 uv run --no-editable python -m unittest discover -s tests # full test suite (unittest, not pytest)
-uv run --no-editable python -m unittest tests.test_markdown.MarkdownRenderingTests.test_simple_table_detection  # single test
+uv run --no-editable python -m unittest tests.test_openunlearning_characterization  # one module
+uv run --no-editable python tests/test_openunlearning_characterization.py  # regenerate its goldens after an intended change
 ```
 
 Keep `--no-editable` in every documented command. It is intentional: editable `.pth` files can be skipped on macOS when marked hidden, so the package is copied into `.venv` instead to keep `uv run` behavior stable. The Poppler integration test self-skips when `pdftotext` is absent.
+
+The suite is **characterization (golden) tests**: a local paper PDF is git-ignored (not committed), and the *current* converter output is committed under `tests/fixtures/` as the golden. The test re-runs the converter and asserts the output is unchanged, and self-skips when the PDF is absent. It pins the text+LaTeX markdown and the artifact metadata (region bboxes, table cell matrices) — so a refactor or performance change can be validated as output-preserving. After an *intended* behavior change, regenerate the goldens with the command above and review the diff before committing.
 
 ## Pipeline architecture
 
