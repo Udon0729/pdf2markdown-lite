@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from functools import cached_property
 from statistics import median
 
 
@@ -40,43 +41,49 @@ class Line:
     block_id: int = 0
     source: str = "text"
 
-    @property
+    # ``words`` is never mutated after construction (every extraction backend
+    # builds the full word list before constructing the Line, and nothing
+    # appends/replaces it later), so these derived values are computed once and
+    # cached. They are read repeatedly per line by the geometry heuristics and
+    # as sort keys, so caching removes the dominant recompute cost; ``text`` in
+    # particular re-ran a regex on every access.
+    @cached_property
     def text(self) -> str:
         return normalize_line_text(" ".join(word.text for word in self.words))
 
-    @property
+    @cached_property
     def x_min(self) -> float:
         return min((word.x_min for word in self.words), default=0.0)
 
-    @property
+    @cached_property
     def y_min(self) -> float:
         return min((word.y_min for word in self.words), default=0.0)
 
-    @property
+    @cached_property
     def x_max(self) -> float:
         return max((word.x_max for word in self.words), default=0.0)
 
-    @property
+    @cached_property
     def y_max(self) -> float:
         return max((word.y_max for word in self.words), default=0.0)
 
-    @property
+    @cached_property
     def width(self) -> float:
         return max(0.0, self.x_max - self.x_min)
 
-    @property
+    @cached_property
     def height(self) -> float:
         return max(0.0, self.y_max - self.y_min)
 
-    @property
+    @cached_property
     def x_center(self) -> float:
         return (self.x_min + self.x_max) / 2
 
-    @property
+    @cached_property
     def y_center(self) -> float:
         return (self.y_min + self.y_max) / 2
 
-    @property
+    @cached_property
     def median_word_height(self) -> float:
         heights = [word.height for word in self.words if word.height > 0]
         return median(heights) if heights else self.height
