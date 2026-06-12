@@ -23,3 +23,8 @@ package = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/pdfmdlite"]
+
+[dependency-groups]
+dev = [
+    "matplotlib>=3.10.9",
+]
