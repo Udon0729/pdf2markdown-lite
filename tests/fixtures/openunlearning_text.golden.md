@@ -38,7 +38,7 @@ OpenUnlearning has been open-sourced1 under the MIT license. Since its release i
 
 OpenUnlearning uses a common definition of LLM unlearning, where the goal is to eliminate the influence of “forget set” $D_{\mathrm{forget}}$ from an LLM $f_{\mathrm{target}}$ to remove associated model capabilities [36]. The process pursues two primary goals: (i) Removal, ensuring influence caused only by $D_{\mathrm{forget}}$ is substantially erased, and (ii) Retention, maintaining the LLM’s utility on unrelated downstream tasks. The setup usually also involves a retain set disjoint from the forget set, used to aid and assess performance preservation.
 
-Formally, given an original model $f_{\mathrm{target}}$ trained on a dataset containing $D_{\mathrm{forget}}$ the unlearning process yields an unlearned model $f_{\mathrm{unlearn}}$ The efficacy of unlearning is typically assessed using evaluation metrics, $M$ which quantify the remaining influence of $D_{\mathrm{forget}}$ on funlearn—e.g., by computing $f_{\mathrm{unlearn}}$ $M(f_{\mathrm{unlearn}}, D_{\mathrm{forget}})$ Concurrently, utility metrics are used to measure the model’s performance on general tasks and data outside of $D_{\mathrm{forget}}$ ensuring its overall capabilities are preserved.
+Formally, given an original model $f_{\mathrm{target}}$ trained on a dataset containing $D_{\mathrm{forget}}$ the unlearning process yields an unlearned model $f_{\mathrm{unlearn}}$ The efficacy of unlearning is typically assessed using evaluation metrics, $M$ which quantify the remaining influence of $D_{\mathrm{forget}}$ on $f_{\mathrm{unlearn}}$—e.g., by computing $M(f_{\mathrm{unlearn}}, D_{\mathrm{forget}})$ Concurrently, utility metrics are used to measure the model’s performance on general tasks and data outside of $D_{\mathrm{forget}}$ ensuring its overall capabilities are preserved.
 
 Unlearning methods: Some LLM unlearning approaches are prompting-based, detecting sensitive queries at inference time and deploying obfuscation mechanisms [4, 41, 19]. But these are not practically scalable as forgetting results accumulate. Of greater interest is the removal of the forget set’s influence directly from the weights. The techniques involved include finetuning with one or more of: (1) tailored loss functions [39, 16, 76, 11, 40], (2) optimization modifications [29, 66, 17], (3) localized parameter updates [33, 10, 20], and (4) alternative-data based approaches [40, 69, 7, 24, 39, 30].
 
@@ -310,14 +310,108 @@ Our meta-evaluation uses a test-bed of models with known ground truths to object
 
 (a) Faithfulness
 
-(e.g., relearning).
+Positive Pool
 
-4.1
+Train on facts
 
-in robustness tests.
+1
+
+from forget set
+
+Metric
+
+Best fitting
+
+Base model
+
+AUC = 0.6
+
+M
+
+AUC = 1 threshold
+
+Train on facts
+
+0
+
+other than forget set Faithful metric Unfaithful metric
+
+Negative Pool
+
+Metric on
+
+(b) Robustness
+
+Quantized Pool
+
+y=x quantization
+
+M after
+
+Model with Knowledge
+
+Unlearning with
+
+Retain model
+
+Quantization
+
+diverse methods
+
+Unreliable
+
+Stress
+
+M before
+
+Compare M
+
+Testing
+
+Learns
+
+before and after
+
+faster than
+
+stress test
+
+Relearning
+
+M after
+
+retain model
+
+Models unlearned according to metric M
+
+Retain model
+
+Relearned Pool
+
+Unreliable
+
+M before
+
+Figure 3: Meta-evaluation of unlearning metrics: (1) Faithfulness: the metric distinguishes models with and without target knowledge, reflected by high AUC; (2) Robustness: the metric value does not increase under benign changes (e.g., quantization) and does not improve faster than a retain model under non-benign changes (e.g., relearning).
+
+4.1 Faithfulness
+
+Faithfulness
+
+Motivation. Unlearning evaluations may not faithfully reflect an LLM’s knowledge. Desideratum. A faithful metric accurately reflects the presence of targeted knowledge by assigning consistently higher scores to models possessing it than to those lacking it.
+
+LLMs often fail to regurgitate facts that remain encoded in their parameters when prompted, making it hard to tell whether a model truly forgot a target fact or simply refrained from exposing it [12, 38, 48, 63]. For example, work by Doshi and Stickland [12] shows that simple paraphrasing of inputs can yield a tenfold increase in evaluation scores on ‘unlearned’ models, indicating that the apparent forgetting may only be superficial. “Deeper” evaluation metrics aim to quantify this knowledge more faithfully, like Truth Ratio [39], GCG [18], or by using prompt engineering [63, 53, 56].
+
+On the other hand, evaluation metrics can register misleadingly high scores without the presence of the target knowledge [39]. For example, in a question-answering evaluation using a simple ROUGE score, a model might achieve a high score by matching the parts of the target unrelated to the target fact. This calls for metrics that are faithful to the knowledge encoded in the model weights.
+
+We measure faithfulness as the ability of metrics to distinguish between models trained with the forget dataset’s knowledge (the positive pool, $P$ and those trained without it (the negative pool, $N$
+
+(i) Each pool has 30 diverse models trained under varying conditions. (ii) These variants present
+
+the target forget10 information for pool P models in diverse, challenging formats (e.g., biography vs. QA, paraphrases). Pool N models serve as negative controls, using similarly structured data lacking this target information using various perturbations and alternative datasets. (iii) Metric scores yield two distributions: $m(P)$ $m(N)$ (for $P$ and $N$ and we compute AUC-ROC to quantify their separability. (iv) We select a classification threshold optimizing accuracy, which is subsequently used in robustness tests.
 
 ```math
-\mathrm{Faithfulnes}\mathrm{s}^{\mathrm{al}}=^{\mathrm{zn}}\mathrm{AUC}-\mathrm{ROC}(m(P^{e}),^{\mathbf{c}}m(N))^{\mathbf{faithfu}\mathbf{l}_{\mathrm{nah}}^{\mathbf{s}}\mathbf{metri}\mathbf{c}_{n\mathbf{be}o}10_{e\mathbf{o}o\mathbf{r}=l\mathbf{er}\mathrm{dx}\mathbf{e}\mathrm{el}}}
+\mathrm{Faithfulness} = \mathrm{AUC}-\mathrm{ROC}(m(P), m(N))
 ```
 
 ## Faithfulness
@@ -328,27 +422,85 @@ in robustness tests.
 
 AUC = 0.79
 
-## 0.3 0.4
+Pos.
+
+0.3
+
+Neg.
+
+0.4
+
+Threshold
+
+0.2
+
+# After
+
+# After
+
+0.2
+
+y = x
+
+y = x
+
+0.1
+
+Unlearn
+
+Unlearn
+
+Retain
+
+Retain
+
+Unreliable
+
+Unreliable
+
+0.3 0.4 0.5
+
+0.0 0.2 0.4
+
+0.0 0.1 0.2 0.3
+
+Before
+
+Before
+
+Figure 4: For the ROUGE metric we evaluate faithfulness (left) and robustness to quantization (middle), and relearning (right). Faithfulness achieves an AUC of 0.79, indicating substantial prediction overlap between models trained with and without the target knowledge. Relearning robustness is 0.48, showing many unlearned models re-acquire knowledge faster than the retain model upon re-exposure. Quantization robustness is 0.93, reflecting no distinctive trend of metric spikes post-quantization.
 
 4.2 Robustness
 
 Robustness
 
+Motivation. Unlearning evaluations can be vulnerable to stress-testing interventions. Desideratum. A robust metric’s positive assessment of unlearning should (1) not flip upon benign model interventions; and (2) behave comparably to a model truly unfamiliar with the data under non-benign interventions.
+
+Robustness of unlearning metrics is probed using various stress-test interventions. These include
+
+(1) relearning attempts, where the unlearned model is further trained to potentially recover the
+
+forgotten information [38, 27, 37, 63]; (2) information extraction via manipulating the model’s internal representations [3, 38, 50, 63, 2]; and (3) applying techniques like quantization [77]. Benign interventions, such as model quantization or relearning on non-forget data, do not reintroduce the forgotten knowledge. In contrast, non-benign interventions—like relearning directly on the forget set—explicitly re-expose the model to the targeted data. These stress tests have revealed that several unlearning evaluation metrics may be unreliable, often signaling successful unlearning even when the underlying knowledge remains recoverable.
+
+For example, Zhang et al. [77] show that the PrivLeak metric [52] that previously reported a model as successfully unlearned can effectively ‘flip’ after a benign intervention, revealing that the targeted knowledge was perhaps never truly erased [77]. Such significant fluctuations under stress tests undermine the reliability of evaluation metrics. Furthermore, models unlearned with respect to a metric can exhibit high susceptibility on metric evaluation to non-benign interventions like relearning, where evaluation metrics show an unusually rapid return of the supposedly forgotten knowledge even with minimal retraining effort [17, 16]. Robustness assesses stability under interventions such as relearning, probing and quantization. While probing was previously used by Wang et al. [63], Seyito˘glu et al. [50], Lynch et al. [38] to stress-test unlearning, in our setup, we found that probed models perform very poorly, with low scores across all metrics and show little discernible trends. Some probing results are shown in Appendix E.3.
+
+Robustness to Relearning: We evaluate metric scores before $m^{a}$ and after $m^{b}$ relearning on forget-set data. Then, we compare relative metric score recovery rates between unlearned $m_{\mathrm{unl}}$ and retain $m_{\mathrm{ret}}$ models, where higher $R$ implies greater robustness.
+
 ```math
-r =^{00}mm_{\mathrm{nl}}^{a\mathrm{re}.\mathrm{t}0}-- mm_{b\mathrm{unl}}^{b\mathrm{ret} 0},^{.e2\mathrm{fo}}R = \mathrm{min}(r, 1).^{000...1230.0 0.1 \mathrm{Be}0\mathrm{fo}.r2e 0.3^{\mathrm{niranble}}}
+r = \frac{m_{\mathrm{ret}}^{a} - m_{\mathrm{ret}}^{b}}{m_{\mathrm{unl}}^{a} - m_{\mathrm{unl}}^{b}} , R = \mathrm{min}(r, 1).
 ```
 
 Robustness to Quantization: We quantize models to 4-bit precision and compute scores before and after quantization, where higher $Q$ implies greater robustness.
 
 ```math
-q = mm_{a\mathrm{unl}}^{b\mathrm{unl}} , Q = \mathrm{min}(q, 1).
+q = \frac{m_{\mathrm{unl}}^{b}}{m_{\mathrm{unl}}^{a}} , Q = \mathrm{min}(q, 1).
 ```
 
-Table 2: Meta-evaluation of 12 unlearning metrics for Faithfulness and Robustness. Robustness is assessed using two stress-testing methods: quantization and relearning, with their harmonic mean reported as Agg. An overall aggregation across both Faithfulness and Robustness is reported in the first Agg. column. Higher scores indicate better performance (↑) in all dimensions. The best values are shown in bold, and the second-best values are underlined.
+Table 2: Meta-evaluation of 12 unlearning metrics for Faithfulness and Robustness. Robustness is assessed using two stress-testing methods: quantization and relearning, with their harmonic mean reported as Agg. An overall aggregation across both Faithfulness and Robustness is reported in the first Agg. column. Higher scores indicate better performance $\uparrow$ in all dimensions. The best values are shown in bold, and the second-best values are underlined.
 
-Robustness ↑ Agg. ↑ Faithful. ↑ Metrics
+Robustness $\uparrow$ Agg. $\uparrow$ Faithful. $\uparrow$ Metrics
 
-Agg. ↑ Quant. ↑ Relearn ↑
+Agg. $\uparrow$ Quant. $\uparrow$ Relearn $\uparrow$
 
 0.85 0.79 0.95 Extraction Strength 0.92 0.68 Exact Mem. 0.80 0.90 0.72 0.92 0.59 0.95 Truth Ratio 0.73 0.59 0.92 0.43 0.98 Para. Prob. 0.73 0.71 0.75 0.60 Para. ROUGE 0.72 0.89 0.61 0.93 0.45 Probability 0.72 0.82 0.65 0.60 0.70
 
@@ -372,7 +524,9 @@ We analyze roughly 400 diverse models from various unlearning methods to reflect
 
 We consolidate evaluations through harmonic mean, ensuring balanced performance across criteria:
 
-Robustness $=$ $(R, Q),$ Overall $=$ HM(Faithfulness, Robustness) $($ $,$ $)$
+```math
+\mathrm{Robustness} = \mathrm{HM}(R, Q), \mathrm{Overall} = \mathrm{HM}(\mathrm{Faithfulness}, \mathrm{Robustness})
+```
 
 An effective unlearning metric must be both faithful in representing unlearning and robust in its measurements; a trivial constant-value metric, for instance, would be robust but entirely unfaithful. To holistically assess a metric, we aggregate these distinct qualities using the Harmonic Mean (HM), as this ensures that a high final score demands strong performance in all constituent parts. Figure 4 illustrates these distributions and scores for the ROUGE metric as an example. Further methodological considerations, including comparisons to prior work, are detailed in Appendix E.4.
 
@@ -380,9 +534,9 @@ An effective unlearning metric must be both faithful in representing unlearning 
 
 Table 2 highlights key insights: (i) Extraction Strength (ES) [5] emerges as most reliable overall, aligning with Wang et al. [63]. (ii) Truth Ratio has superior faithfulness but lower robustness, ranking third overall. (iii) Metrics based on raw probabilities or ROUGE scores have moderate faithfulness and robustness, limiting their reliability. (iv) Membership inference (MIA)-based metrics demonstrate high faithfulness but lack robustness, cautioning against relying solely on MIA metrics for assessing unlearning. This sensitivity raises concerns about the reliability of the MIA-based privacy assessments
 
-Table 3: Comparison of unlearning methods on the TOFU task, showing overall aggregate (Agg.), memorization (Mem.), privacy (Priv.), and utility (Utility) scores. Higher scores indicate better performance (↑). Initial finetuned is the target model before unlearning and Retain model is the gold standard target model. The best values are shown in bold, and the second-best values are underlined.
+Table 3: Comparison of unlearning methods on the TOFU task, showing overall aggregate (Agg.), memorization (Mem.), privacy (Priv.), and utility (Utility) scores. Higher scores indicate better performance $\uparrow$ Initial finetuned is the target model before unlearning and Retain model is the gold standard target model. The best values are shown in bold, and the second-best values are underlined.
 
-Agg. ↑ Mem. ↑ Priv. ↑ Utility ↑ Method
+Agg. $\uparrow$ Mem. $\uparrow$ Priv. $\uparrow$ Utility $\uparrow$ Method
 
 Init. finetuned 0.00 0.00 0.10 1.00 Retain 0.58 0.31 1.00 0.99
 
@@ -1104,34 +1258,22 @@ Memorization Metrics: These metrics quantify how much the model has memorized in
 
 model’s response that exactly match those in the ground truth $y$ [58]. Formally, it is defined as
 
-EM $= 1$
-
-$\sum$
-
-f(y | [x, y<k]; θ) = yk $1$ $\mathrm{arg} \mathrm{max}$ $,$
-
-$|y|$
-
-y k
+```math
+\mathrm{EM} = \frac{1}{|y|} \sum_{k} 1 \{\mathrm{arg} \mathrm{max} f(y | [x, y^{<k}]; \theta) = y^{k}\} ,
+```
 
 2. Extraction Strength (ES): Quantifies the intensity of memorization by determining the minimal
 
 prefix length required to reconstruct the remaining suffix [5].
 
-ES $= 1 - 1$
-
-$\sum$ k | f([x, y<k]; θ) = y>ko
-
-$|y| \mathrm{min}$
-
-$.$
-
-k
+```math
+\mathrm{ES} = 1 - \frac{1}{|y|} \mathrm{min} \{k | f([x, y^{<k}]; \theta) = y^{>k}\} .
+```
 
 3. Probability (Prob.): Directly quantifies the model’s confidence in its output.
 
 ```math
-\mathrm{Probability} = p\sum f(y | x)\sum
+\mathrm{Probability} = p(f(y | x))
 ```
 
 4. Paraphrased Probability (Prob.): Probability computed on a paraphrased answer ypara to remove
@@ -1139,7 +1281,7 @@ k
 template bias.
 
 ```math
-\mathrm{Para}. \mathrm{Prob}. = p\sum f(y^{\mathrm{para}} | x)\sum
+\mathrm{Para}. \mathrm{Prob}. = p(f(y^{\mathrm{para}} | x))
 ```
 
 5. ROUGE/Paraphrased ROUGE: Assesses the degree of overlap between the model’s output
@@ -1157,7 +1299,7 @@ rect) alternative by comparing their predicted probabilities. A higher value ind
 computed as Truth Ratio = min( p(ypara|x)
 
 ```math
-\mathrm{Truth} \mathrm{Rati}\mathrm{o}_{x}=,p(y_{|x}^{\mathrm{par}|\mathrm{a}x}p|()\mathrm{xy}.)\mathrm{W}+\mathrm{e}p|\mathrm{m}(\mathrm{xy}\mathrm{o})\mathrm{dify}| \mathrm{i}x\mathrm{t})\mathrm{so} \mathrm{that} \mathrm{it} \mathrm{quantifies} \mathrm{extent} \mathrm{of}
+\mathrm{Truth} \mathrm{Ratio} = \frac{p(y^{\mathrm{para}} | x)}{p(y^{\mathrm{para}} | x) + p(y^{\mathrm{pert}} | x)} \\ , \frac{p(y^{\mathrm{pert}}|x)}{p(y^{\mathrm{para}}|x)} ). \mathrm{We} \mathrm{modify} \mathrm{it} \mathrm{so} \mathrm{that} \mathrm{it} \mathrm{quantifies} \mathrm{extent} \mathrm{of}
 ```
 
 knowledge for our work’s purposes.
@@ -1302,127 +1444,61 @@ Figure 7: Example model configurations for two different LLAMA variants: (a) LLA
 
 OpenUnlearning addresses this gap by providing a unified and modular infrastructure that abstracts away benchmark-specific details. Researchers can implement their method once, typically by extending a custom Trainer, and instantly evaluate it across multiple benchmarks. This design dramatically lowers the barrier to method development, evaluation and encourages the community to develop robust methods that work across benchmarks. We currently support all commonly used baselines as well as several state-of-the-art methods, and we invite the community to build upon this foundation.
 
-Gradient Ascent [39]: Performs gradient ascent on the forget set to degrade model confidence on targeted data. L = −γE(x,yf)∼Dforgetℓ $\sum$ $y_{\mathrm{f}}|x; f_{\mathrm{unl}}$
+Gradient Ascent [39]: Performs gradient ascent on the forget set to degrade model confidence on targeted data.
 
-GradDiff [39]: Performs gradient ascent on forget data and descent on retain data.
-
-L = −γE(x,yf)∼Dforgetℓ $\sum$
-
-+ αE(x,y)∼Dretainℓ
-
-$y_{\mathrm{f}}|x; f_{\mathrm{unl}}$ $y|x; f_{\mathrm{unl}}$
+```math
+\mathcal{L} = -\gamma\mathbb{E}_{(x,y_{\mathrm{f}})\sim D_{\mathrm{forget}}}\ell(y_{\mathrm{f}}|x;f_{\mathrm{unl}}) \\ \mathcal{L} = -\gamma\mathbb{E}_{(x,y_{\mathrm{f}})\sim D_{\mathrm{forget}}}\ell(y_{\mathrm{f}}|x;f_{\mathrm{unl}}) + \alpha\mathbb{E}_{(x,y)\sim D_{\mathrm{retain}}}\ell(y|x;f_{\mathrm{unl}})
+```
 
 IdkNLL [39]: Trains to output "I don’t know" responses when queried on forgotten content.
 
-L = γE(x,yf)∼Dforgetℓ $\sum$
-
-+ αE(x,y)∼Dretainℓ
-
-$y_{\mathrm{idk}}|x; f_{\mathrm{unl}}$ $y|x; f_{\mathrm{unl}}$
+```math
+\mathcal{L} = \gamma\mathbb{E}_{(x,y_{\mathrm{f}})\sim D_{\mathrm{forget}}}\ell(y_{\mathrm{idk}}|x;f_{\mathrm{unl}}) + \alpha\mathbb{E}_{(x,y)\sim D_{\mathrm{retain}}}\ell(y|x;f_{\mathrm{unl}})
+```
 
 IdkDPO [39]: Uses a DPO-style objective to align the model to output "I don’t know" responses when queried on forgotten content.
 
-$\sum p(y_{\mathrm{idk}}|x; f_{\mathrm{unl}})$
-
-$\sum p(y_{\mathrm{f}}|x; f_{\mathrm{unl}})$
-
-$\mathcal{L} = - 2$
-
-β E(x,yf)∼Dforget log σ −β log
-
-−β log
-
-$p(y_{\mathrm{idk}}|x; f_{\mathrm{target}})$
-
-$p(y_{\mathrm{f}}|x; f_{\mathrm{target}})$
-
-+ αE(x,y)∼Dretainℓ
-
-$y|x; f_{\mathrm{unl}}$
+```math
+\mathcal{L} = - \frac{2}{\beta+} \mathbb{E}\alpha\mathbb{E}_{y(x),y\sim)D\sim D_{\mathrm{reta}}^{\mathrm{et}}}\mathrm{lo}\ell\mathrm{g}(y\sigma|(x;-f_{\mathrm{u}}\beta )\mathrm{log} ( \frac{p(y_{\mathrm{idk}}|x; f_{\mathrm{unl}})}{p(y_{\mathrm{idk}}|x; f_{\mathrm{target}})} ) - \beta \mathrm{log} ( \frac{p(y_{\mathrm{f}}|x; f_{\mathrm{unl}})}{p(y_{\mathrm{f}}|x; f_{\mathrm{target}})} ))
+```
 
 NPO [76]: Similar to the DPO-style objective, but uses only the negative feedback term in its formulation. It demonstrates better training stability compared to similar methods like GradDiff.
 
-$\sum p(y_{\mathrm{f}}|x; f_{\mathrm{unl}})$
+```math
+\mathcal{L} = - \frac{2}{\beta+} \mathbb{E}\alpha\mathbb{E}_{y(x),y\sim)D\sim D_{\mathrm{reta}}^{\mathrm{et}}}\mathrm{lo}\ell\mathrm{g}(y\sigma|(x;-f_{\mathrm{u}}\beta )\mathrm{log} ( \frac{p(y_{\mathrm{f}}|x; f_{\mathrm{unl}})}{p(y_{\mathrm{f}}|x; f_{\mathrm{target}})} ))
+```
 
-$\mathcal{L} = - 2$
+SimNPO [16]: A modified variant of NPO that retains its core forgetting behavior by replacing the reference model with $\delta$ in the loss formulation.
 
-β E(x,yf)∼Dforget log σ −β log
+L = −2
 
-$p(y_{\mathrm{f}}|x; f_{\mathrm{target}})$
-
-+ αE(x,y)∼Dretainℓ
-
-$y|x; f_{\mathrm{unl}}$
-
-SimNPO [16]: A modified variant of NPO that retains its core forgetting behavior by replacing the reference model with δ in the loss formulation.
-
-$\mathcal{L} = - 2$
-
-−β β E(x,yf)∼Dforget log σ
-
-+ αE(x,y)∼Dretainℓ
-
-|yf| log p(yf|x; funl) −δ $y|x; f_{\mathrm{unl}}$
+```math
+\beta \mathbb{E}_{(x,y_{\mathrm{f}})\sim D_{\mathrm{forget}}} \mathrm{log} \sigma( - \frac{\beta}{|y_{\mathrm{f}}|} \mathrm{log} p(y_{\mathrm{f}}|x; f_{\mathrm{unl}}) - \delta)) + \alpha\mathbb{E}_{(x,y)\sim D_{\mathrm{retain}}}\ell(y|x; f_{\mathrm{unl}})
+```
 
 AltPO [40]: Uses a DPO-style objective to align the model toward generating alternate, in-domain plausible facts (produced by the model itself) that introduce ambiguity and suppress the original target knowledge.
 
-$\sum p(y_{\mathrm{alt}}|x; f_{\mathrm{unl}})$
+```math
+\mathcal{L} = - \frac{2}{\beta+} \mathbb{E}\alpha\mathbb{E}_{y(x),y\sim)D\sim D_{\mathrm{reta}}^{\mathrm{et}}}\mathrm{lo}\ell\mathrm{g}(y\sigma|(x;-f_{\mathrm{u}}\beta )\mathrm{log} ( \frac{p(y_{\mathrm{alt}}|x; f_{\mathrm{unl}})}{p(y_{\mathrm{alt}}|x; f_{\mathrm{target}})} ) - \beta \mathrm{log} ( \frac{p(y_{\mathrm{f}}|x; f_{\mathrm{unl}})}{p(y_{\mathrm{f}}|x; f_{\mathrm{target}})} ))
+```
 
-$\sum p(y_{\mathrm{f}}|x; f_{\mathrm{unl}})$
+RMU [33]: Assumes knowledge is encoded in model parameters and manipulates these representations to suppress memorization signals for the forget set while preserving knowledge in the retain set. Let $\phi(s; f_{\mathrm{unl}})$ denote the embedding features of the model, the loss is given by
 
-$\mathcal{L} = - 2$
-
-β E(x,yf)∼Dforget log σ −β log
-
-−β log
-
-$p(y_{\mathrm{alt}}|x; f_{\mathrm{target}})$
-
-$p(y_{\mathrm{f}}|x; f_{\mathrm{target}})$
-
-+ αE(x,y)∼Dretainℓ
-
-$y|x; f_{\mathrm{unl}}$
-
-RMU [33]: Assumes knowledge is encoded in model parameters and manipulates these representations to suppress memorization signals for the forget set while preserving knowledge in the retain set. Let ϕ(s; funl) denote the embedding features of the model, the loss is given by
-
-|yf|
-
-$1$
-
-$\sum$
-
-L =E(x,yf )∼Dforget
-
-||ϕ([x, y<i]; funl) −c · u||2 2
-
-$|y_{\mathrm{f}}|$
-
-i=1
-
-|y|
-
-$1$
-
-$\sum$
-
-+ E(x,y)∼Dretain
-
-||ϕ([x, y<i]; funl) −ϕ([x, y<i]; ftarget)||2 $,$
-
-$|y|$
+```math
+\mathcal{L} =\mathbb{E}_{(x,y_{f})\sim D_{\mathrm{forget}}} |y_{\mathrm{f}} \sum_{|}^{|y_{\mathrm{f}}|}||\phi([x, y^{<i}];f_{\mathrm{unl}}) - c \cdot u||^{2} \\ + \mathbb{E}_{(x,y)\sim D_{\mathrm{retain}}} |y \sum_{|}^{|y|} ||\phi([x, y^{<i}]; f_{\mathrm{unl}}) - \phi([x, y^{<i}]; f_{\mathrm{target}})||_{2}^{2},
+```
 
 i=1
 
 where $u$ has elements randomly sampled from $[0, 1)$ and $c$ is a scaling hyper-parameter.
 
-UNDIAL [11]: Mitigates the instability found in prior methods by employing self-distillation, where the model learns from its own adjusted outputs. The core idea is to reduce the model’s confidence in the target token by adjusting its logits, thereby diminishing its influence without affecting the overall model performance. This is achieved by minimizing the KL divergence between the adjusted logits and the model’s current output distribution. zadj(x) = zorig(x) −β · 1yf
+UNDIAL [11]: Mitigates the instability found in prior methods by employing self-distillation, where the model learns from its own adjusted outputs. The core idea is to reduce the model’s confidence in the target token by adjusting its logits, thereby diminishing its influence without affecting the overall model performance. This is achieved by minimizing the KL divergence between the adjusted logits and the model’s current output distribution.
 
-$\sum\sum$ $\sum$
+L = γE(x,yf )∼Dforget
 
-+ αE(x,y)∼Dretainℓ
-
-L = γE(x,yf )∼Dforget $y|x; f_{\mathrm{unl}}$ softmax(zadj(x)) ∥softmax(zunl(x)) $(z_{\mathrm{unl}}(x))$ KL
+```math
+z_{\mathrm{adj}}(x) = z_{\mathrm{orig}}(x) - \beta \cdot 1_{y_{f}} \\ [ ( )] + \alpha\mathbb{E}_{(x,y)\sim D_{\mathrm{retain}}}\ell(y|x; f_{\mathrm{unl}})
+```
 
 Where $z_{\mathrm{orig}}(x)$ is the original logits produced by the model before unlearning and $z_{\mathrm{adj}}(x)$ is the adjusted logits.
 
@@ -1430,7 +1506,7 @@ C.6 Technical improvements:
 
 Efficiency: MUSE evaluates models without batching, while our implementation uses batched inference to improve efficiency. TOFU pads all sequences to a fixed max_length of 512, resulting in unnecessary GPU memory and compute overhead. In contrast, we apply dynamic padding based on the longest sequence in each batch. WMDP lacks a rigorous training and unlearning framework, limiting its extensibility for developing and evaluating new methods.
 
-Training paradigms supported: Training or unlearning with larger models (e.g., ≥8B parameters) presents a significant computational challenge, often necessitating multiple high-end GPUs such as NVIDIA A100s. To accelerate this process, we support:
+Training paradigms supported: Training or unlearning with larger models (e.g., $\geq$8B parameters) presents a significant computational challenge, often necessitating multiple high-end GPUs such as NVIDIA A100s. To accelerate this process, we support:
 
 1. DeepSpeed ZeRO Stage-3 [28]: Enabled via the Accelerate library [25], reducing the memory
 
@@ -1482,7 +1558,7 @@ model head from the corresponding retain90-trained model. This head is trained w
 
 Table 5: Robustness meta-evaluation with probing (layer 11)
 
-Probe ↑ Metrics
+Probe $\uparrow$ Metrics
 
 Exact Mem. 1.0 Extr. Strength 1.0 Truth Ratio 1.0 Prob. 0.99
 
@@ -1500,9 +1576,9 @@ Figure 8 shows the faithfulness of the metrics, while Figure 9 and Figure 10 sho
 
 Probing results: We compute the metric robustness to probing intervention as follows
 
-$m^{b}$ $p = m^{a}$ ret ret ≥1, $P = \mathrm{min}(p, 1)$ if
-
-$m^{a}$ $m^{b}$ unl unl
+```math
+p = \frac{m_{\mathrm{ret}}^{a}}{m_{\mathrm{unl}}^{a}} \frac{m_{\mathrm{ret}}^{b}}{m_{\mathrm{unl}}^{b}} \geq 1, P = \mathrm{min}(p, 1)
+```
 
 Table 5 shows the results of our metric meta-evaluation with probing. Probing, while provided for by OpenUnlearning, is not used in the meta-evaluation procedure, as $P$ scores on TOFU achieve 1 for all metrics and thus offer little information.
 
@@ -2422,7 +2498,7 @@ We consider multiple metrics in each dimension and aggregate the score as follow
 
 calculated as the Harmonic Mean (HM) of 4 core metrics which are best as per our metaevaluations analysis in §2 — ES, EM, Paraphrased Probability and Truth Ratio. These metrics are inverted (i.e., $1 -$ −metric) so that higher scores indicate more effective unlearning. The score is given by:
 
-Memorization Score $=$ HM $(1 -$ −ES, $, 1 -$ −EM, $, 1 -$ −Para. Prob, $, 1 -$ −Truth Ratio) $)$
+Memorization Score $=$ HM $(1 -$ −ES, $, 1 -$ −EM, $, 1 -$ −Para. Prob, $, 1 -$ −Truth Ratio$)$
 
 2. Privacy: For assessing privacy, we utilize four Membership Inference Attack (MIA) metrics:
 
@@ -2446,7 +2522,7 @@ $10^{-5}, 4 \times 10^{-5}, 5 \times 10^{-5}\}$ and sweep the regularization coe
 
 2. For IdK-DPO, NPO and AltPO: we tune learning rates in {1 × 10−5, 2 × 10−5, 5 × 10−5}, and
 
-search over $\alpha \in \{1, 2, 5\}$ and β ∈{0.05, 0.1, 0.5}.
+search over $\alpha \in \{1, 2, 5\}$ and $\beta \in \{0.05, 0.1, 0.5\}$
 
 3. For RMU: we use the same learning rate range {1 × 10−5, 2 × 10−5, 5 × 10−5}, vary the
 
@@ -2454,11 +2530,11 @@ steering coefficient in $\{1, 10, 100\}$ and apply the loss at one of the layers
 
 4. For SimNPO: we tune learning rates in {1 × 10−5, 2 × 10−5, 5 × 10−5}, and search over
 
-β ∈{3.5, 4.5}, δ ∈{0, 1} and δ ∈{0.125, 0.25}.
+$\beta \in \{3.5, 4.5\}$ $\delta \in \{0, 1\}$ and $\delta \in \{0.125, 0.25\}$
 
 5. For UNDIAL: we tune learning rates in {1 × 10−5, 1 × 10−4, 3 × 10−4}, and search over
 
-$\alpha \in \{1, 2, 5\}$ and β ∈{3, 10, 30}.
+$\alpha \in \{1, 2, 5\}$ and $\beta \in \{3, 10, 30\}$
 
 We aggregate utility score and memorization score and use their harmonic mean for tuning the models.
 
@@ -2466,9 +2542,9 @@ What metrics are appropriate for model selection during hyperparameter tuning? T
 
 7https://huggingface.co/madhurjindal/autonlp-Gibberish-Detector-492513457
 
-Table 6: Comparison of unlearning methods on the TOFU task, showing aggregate (Agg.) using only Memorization (Mem.) and utility (Utility) scores. Privacy scores are not used in the aggregation and are only shown for illustration. Higher scores indicate better performance (↑). Initial finetuned is the target model before unlearning and Retain model is the gold standard target model. The focus on memorization as opposed to privacy results in GradDiff performing the best as it easily results in over-unlearning.
+Table 6: Comparison of unlearning methods on the TOFU task, showing aggregate (Agg.) using only Memorization (Mem.) and utility (Utility) scores. Privacy scores are not used in the aggregation and are only shown for illustration. Higher scores indicate better performance $\uparrow$ Initial finetuned is the target model before unlearning and Retain model is the gold standard target model. The focus on memorization as opposed to privacy results in GradDiff performing the best as it easily results in over-unlearning.
 
-Agg. ↑ Mem. ↑ Priv. ↑ Utility ↑ Method
+Agg. $\uparrow$ Mem. $\uparrow$ Priv. $\uparrow$ Utility $\uparrow$ Method
 
 Init. finetuned 0.00 0.00 0.10 1.00 Retain 0.58 0.31 1.00 0.99
 

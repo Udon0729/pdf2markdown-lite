@@ -387,6 +387,11 @@ def _heading_level(line: Line, median_word_height: float) -> int:
     if "{" in text or "}" in text:
         return 0
 
+    # A line of nothing but digits/punctuation (an axis label "0.5", a leaked
+    # figure measure "0.0 0.2 0.4") is never a heading, whatever its size.
+    if re.fullmatch(r"[\d.,%\-\s]+", text):
+        return 0
+
     ratio = line.median_word_height / median_word_height if median_word_height else 1.0
     numbered_heading = re.match(r"^\d+(?:\.\d+)*\.?\s+\S+", text) is not None
     short_title = len(text) <= 80 and len(text.split()) <= 12
@@ -659,10 +664,16 @@ def _splice_inline_math(line: Line, regions: list[Any]) -> str:
     words are dropped and the region's LaTeX is inserted once, in reading order,
     where the run began. Words a region does not cover are emitted verbatim, so
     surrounding prose is preserved exactly.
+
+    A region that covers no word *center* (it spans only part of a longer word,
+    e.g. the "ℓ4" of "ℓ4-norm") is spliced INTO the word it x-overlaps by
+    replacing the region's ``source_text`` substring, so the source glyphs are
+    neither emitted twice nor the math appended out of place.
     """
     ordered_regions = sorted(regions, key=lambda r: r.bbox.x0)
     words = sorted(line.words, key=lambda w: w.x_min)
     pieces: list[str] = []
+    piece_word: list[Any] = []  # the source Word of each piece, or None
     emitted: set[int] = set()
     for word in words:
         center = word.x_center
@@ -673,16 +684,53 @@ def _splice_inline_math(line: Line, regions: list[Any]) -> str:
                 break
         if covering is None:
             pieces.append(word.text)
+            piece_word.append(word)
             continue
         if covering not in emitted:
             pieces.append(f"${ordered_regions[covering].latex}$")
+            piece_word.append(None)
             emitted.add(covering)
-    # Any region whose words were not matched (rare) is appended so its math is
-    # never silently dropped.
     for ri, region in enumerate(ordered_regions):
-        if ri not in emitted:
-            pieces.append(f"${region.latex}$")
+        if ri in emitted:
+            continue
+        # Partial-word coverage: splice the LaTeX into the overlapping word by
+        # replacing the run's source characters.
+        if _splice_into_word(pieces, piece_word, region):
+            continue
+        # Fallback: append so the math is never silently dropped.
+        pieces.append(f"${region.latex}$")
+        piece_word.append(None)
     return normalize_line_text(" ".join(piece for piece in pieces if piece))
+
+
+def _splice_into_word(
+    pieces: list[str], piece_word: list[Any], region: Any
+) -> bool:
+    """Replace ``region.source_text`` inside the word piece it x-overlaps.
+
+    Returns True when the splice succeeded. The candidate is the verbatim word
+    piece with the greatest x-overlap with the region's bbox that contains the
+    region's source characters; only one occurrence is replaced.
+    """
+    source_text = getattr(region, "source_text", "")
+    if not source_text:
+        return False
+    bbox = region.bbox
+    best_index: int | None = None
+    best_overlap = 0.0
+    for pi, word in enumerate(piece_word):
+        if word is None or source_text not in pieces[pi]:
+            continue
+        overlap = max(0.0, min(word.x_max, bbox.x1) - max(word.x_min, bbox.x0))
+        if overlap > best_overlap:
+            best_index = pi
+            best_overlap = overlap
+    if best_index is None or best_overlap <= 0.0:
+        return False
+    pieces[best_index] = pieces[best_index].replace(
+        source_text, f"${region.latex}$", 1
+    )
+    return True
 
 
 def _join_paragraph(lines: list[str]) -> str:

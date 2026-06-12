@@ -41,6 +41,54 @@ from typing import Any
 # not here. Only \sum occurs in the target document; the default is \sum.
 LARGEOP_PLACEHOLDER = "\\sum"
 
+# CMEX10 encoding slot -> token. The texttrace glyph id of a CMEX glyph is
+# always 0xFFFD, but the rawdict char IS the OMX encoding slot byte (proven on
+# both sample papers: 0x00/0x01 big parens, 'h'/'i' = 0x68/0x69 Big brackets,
+# 'n'/'o' = 0x6E/0x6F Big braces, 'P'/'X' = 0x50/0x58 text/display \sum), so
+# the cmex10 chart resolves delimiters, radicals and the concrete large
+# operator deterministically. Extensible multi-piece slots (0x30..0x4F tops/
+# bottoms/extenders) are intentionally absent: a single piece is not a
+# delimiter and must keep failing loudly until composed properly.
+_CMEX_SLOT_DELIMITERS: dict[int, str] = {
+    # parenleft: big/Big/bigg/Bigg.
+    0x00: "(", 0x10: "(", 0x12: "(", 0x20: "(",
+    0x01: ")", 0x11: ")", 0x13: ")", 0x21: ")",
+    # bracketleft/right.
+    0x02: "[", 0x14: "[", 0x22: "[", 0x68: "[",
+    0x03: "]", 0x15: "]", 0x23: "]", 0x69: "]",
+    # floor / ceiling.
+    0x04: r"\lfloor", 0x16: r"\lfloor", 0x24: r"\lfloor", 0x6A: r"\lfloor",
+    0x05: r"\rfloor", 0x17: r"\rfloor", 0x25: r"\rfloor", 0x6B: r"\rfloor",
+    0x06: r"\lceil", 0x18: r"\lceil", 0x26: r"\lceil", 0x6C: r"\lceil",
+    0x07: r"\rceil", 0x19: r"\rceil", 0x27: r"\rceil", 0x6D: r"\rceil",
+    # braceleft/right.
+    0x08: r"\{", 0x1A: r"\{", 0x28: r"\{", 0x6E: r"\{",
+    0x09: r"\}", 0x1B: r"\}", 0x29: r"\}", 0x6F: r"\}",
+    # angle brackets.
+    0x0A: r"\langle", 0x1C: r"\langle", 0x2A: r"\langle",
+    0x0B: r"\rangle", 0x1D: r"\rangle", 0x2B: r"\rangle",
+    # vertical extenders and slashes.
+    0x0C: "|", 0x0D: r"\|",
+    0x0E: "/", 0x1E: "/", 0x2C: "/",
+    0x0F: "\\backslash", 0x1F: "\\backslash", 0x2D: "\\backslash",
+    # radical signs (all sizes); the radicand is resolved by the vinculum.
+    0x70: r"\sqrt", 0x71: r"\sqrt", 0x72: r"\sqrt", 0x73: r"\sqrt",
+}
+
+# CMEX10 encoding slot -> large-operator command (text and display sizes).
+_CMEX_SLOT_LARGEOPS: dict[int, str] = {
+    0x50: r"\sum", 0x58: r"\sum",
+    0x51: r"\prod", 0x59: r"\prod",
+    0x52: r"\int", 0x5A: r"\int",
+    0x53: r"\bigcup", 0x5B: r"\bigcup",
+    0x54: r"\bigcap", 0x5C: r"\bigcap",
+    0x55: r"\biguplus", 0x5D: r"\biguplus",
+    0x56: r"\bigwedge", 0x5E: r"\bigwedge",
+    0x57: r"\bigvee", 0x5F: r"\bigvee",
+    0x60: r"\coprod", 0x61: r"\coprod",
+    0x48: r"\oint", 0x49: r"\oint",
+}
+
 # A marker emitted for the CMEX brace pieces of an \underbrace decoration.
 UNDERBRACE_MARKER = "\\underbrace"
 
@@ -102,17 +150,172 @@ class MathGlyph:
 
 # Codepoint -> LaTeX. ASCII printable (letters, digits, operators, parens) maps
 # to itself via the identity branch in classify(); only non-ASCII or named
-# commands need an entry here.
+# commands need an entry here. Keys are Unicode codepoints, which PyMuPDF
+# resolves through the font's ToUnicode map, so an entry only ever fires when
+# that exact character is present -- extending this table is safe by design.
 UNI2TEX: dict[int, str] = {
+    # Binary operators and punctuation.
     0x2212: "-",            # MINUS SIGN
-    0x2208: r"\in",
-    0x2248: r"\approx",
-    0x2282: r"\subset",
+    0x00B1: r"\pm",
+    0x2213: r"\mp",
     0x00D7: r"\times",
-    0x2032: r"\prime",
+    0x00F7: r"\div",
+    0x22C5: r"\cdot",
+    0x00B7: r"\cdot",       # MIDDLE DOT, used as \cdot by many fonts
+    0x2218: r"\circ",
+    0x2219: r"\bullet",
     0x2217: r"\ast",
+    0x22C6: r"\star",
+    0x2020: r"\dagger",
+    0x2021: r"\ddagger",
+    0x2032: r"\prime",
+    # Relations.
+    0x2264: r"\leq",
+    0x2265: r"\geq",
+    0x2260: r"\neq",
+    0x2261: r"\equiv",
+    0x223C: r"\sim",
+    0x2243: r"\simeq",
+    0x2245: r"\cong",
+    0x2248: r"\approx",
+    0x224D: r"\asymp",
+    0x221D: r"\propto",
+    0x226A: r"\ll",
+    0x226B: r"\gg",
+    0x227A: r"\prec",
+    0x227B: r"\succ",
+    0x2AAF: r"\preceq",
+    0x2AB0: r"\succeq",
+    # Set theory and logic.
+    0x2208: r"\in",
+    0x2209: r"\notin",
+    0x220B: r"\ni",
+    0x2282: r"\subset",
+    0x2283: r"\supset",
+    0x2286: r"\subseteq",
+    0x2287: r"\supseteq",
+    0x222A: r"\cup",
+    0x2229: r"\cap",
+    0x2293: r"\sqcap",
+    0x2294: r"\sqcup",
+    0x2227: r"\wedge",
+    0x2228: r"\vee",
+    0x00AC: r"\neg",
+    0x2200: r"\forall",
+    0x2203: r"\exists",
+    0x2205: r"\emptyset",
+    # Calculus and operators (text-size Unicode forms; CMEX display sizes are
+    # resolved by the glyph-id table instead).
+    0x2202: r"\partial",
+    0x2207: r"\nabla",
+    0x221E: r"\infty",
+    0x222B: r"\int",
+    0x2211: r"\sum",
+    0x220F: r"\prod",
+    0x221A: r"\sqrt",       # radical sign; its body is resolved by the vinculum
+    # Circled operators.
+    0x2295: r"\oplus",
+    0x2296: r"\ominus",
+    0x2297: r"\otimes",
+    0x2299: r"\odot",
+    # Arrows.
+    0x2192: r"\rightarrow",
+    0x2190: r"\leftarrow",
+    0x2194: r"\leftrightarrow",
+    0x21D2: r"\Rightarrow",
+    0x21D0: r"\Leftarrow",
+    0x21D4: r"\Leftrightarrow",
+    0x21A6: r"\mapsto",
+    0x2191: r"\uparrow",
+    0x2193: r"\downarrow",
+    0x27F6: r"\longrightarrow",
+    0x27F5: r"\longleftarrow",
+    0x27F9: r"\Longrightarrow",
+    0x21CC: r"\rightleftharpoons",
+    # Delimiters and verticals.
+    0x27E8: r"\langle",
+    0x2329: r"\langle",
+    0x27E9: r"\rangle",
+    0x232A: r"\rangle",
+    0x2016: r"\Vert",
+    0x2225: r"\parallel",
+    0x2223: r"\mid",
+    # Misc symbols.
+    0x22A4: r"\top",
+    0x22A5: r"\bot",
+    0x22A2: r"\vdash",
+    0x22A3: r"\dashv",
+    0x22A8: r"\models",
+    0x2220: r"\angle",
+    0x25B3: r"\triangle",
+    0x2026: r"\dots",
+    0x22EF: r"\cdots",
+    0x22EE: r"\vdots",
+    0x22F1: r"\ddots",
     0x2113: r"\ell",
+    0x210E: "h",            # PLANCK CONSTANT: the Unicode italic 'h'
+    0x210F: r"\hbar",
+    0x211C: r"\Re",
+    0x2111: r"\Im",
+    0x2135: r"\aleph",
+    0x2118: r"\wp",
+    0x0131: r"\imath",
+    0x0237: r"\jmath",
+    # Letterlike blackboard-bold capitals.
+    0x2102: r"\mathbb{C}",
+    0x210D: r"\mathbb{H}",
+    0x2115: r"\mathbb{N}",
+    0x2119: r"\mathbb{P}",
+    0x211A: r"\mathbb{Q}",
+    0x211D: r"\mathbb{R}",
+    0x2124: r"\mathbb{Z}",
+    # Greek lowercase (TeX's var* convention: U+03B5 is \varepsilon and U+03F5
+    # is \epsilon; U+03C6 is \varphi and U+03D5 is \phi).
     0x03B1: r"\alpha",
+    0x03B2: r"\beta",
+    0x03B3: r"\gamma",
+    0x03B4: r"\delta",
+    0x03B5: r"\varepsilon",
+    0x03F5: r"\epsilon",
+    0x03B6: r"\zeta",
+    0x03B7: r"\eta",
+    0x03B8: r"\theta",
+    0x03D1: r"\vartheta",
+    0x03B9: r"\iota",
+    0x03BA: r"\kappa",
+    0x03F0: r"\varkappa",
+    0x03BB: r"\lambda",
+    0x03BC: r"\mu",
+    0x00B5: r"\mu",         # MICRO SIGN, used for \mu by some ToUnicode maps
+    0x03BD: r"\nu",
+    0x03BE: r"\xi",
+    0x03C0: r"\pi",
+    0x03D6: r"\varpi",
+    0x03C1: r"\rho",
+    0x03F1: r"\varrho",
+    0x03C3: r"\sigma",
+    0x03C2: r"\varsigma",
+    0x03C4: r"\tau",
+    0x03C5: r"\upsilon",
+    0x03C6: r"\varphi",
+    0x03D5: r"\phi",
+    0x03C7: r"\chi",
+    0x03C8: r"\psi",
+    0x03C9: r"\omega",
+    # Greek uppercase (the shapes distinct from Latin capitals).
+    0x0393: r"\Gamma",
+    0x0394: r"\Delta",
+    0x2206: r"\Delta",      # INCREMENT, used for \Delta by some ToUnicode maps
+    0x0398: r"\Theta",
+    0x039B: r"\Lambda",
+    0x039E: r"\Xi",
+    0x03A0: r"\Pi",
+    0x03A3: r"\Sigma",
+    0x03A5: r"\Upsilon",
+    0x03A6: r"\Phi",
+    0x03A8: r"\Psi",
+    0x03A9: r"\Omega",
+    0x2126: r"\Omega",      # OHM SIGN, used for \Omega by some ToUnicode maps
 }
 
 # (font regex, style kind). First match wins. Style is applied at grouping time,
@@ -126,6 +329,12 @@ FONT_STYLE: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"^MSAM"), "amssymbol"),
     (re.compile(r"^CMSY"), "symbol"),
     (re.compile(r"^CMEX"), "largeop"),
+    # Latin Modern math fonts (the Type1 successors of the CM families, used by
+    # lualatex/xelatex documents and the lmodern package).
+    (re.compile(r"^LMMathItalic"), "italic_bare"),
+    (re.compile(r"^LMMathSymbols"), "symbol"),
+    (re.compile(r"^LMMathExtension"), "largeop"),
+    (re.compile(r"^LMRoman"), "upright"),
     # A text-serif font reaching the recogniser only does so as a glyph already
     # inside a math run (e.g. the nested 'hid' of d_{hid}); such upright text is
     # set with \mathrm.
@@ -156,20 +365,133 @@ def _is_math_delimiter_glyph(glyph: MathGlyph) -> bool:
     return _font_prefix(glyph.font) == "CMSY" and glyph.gid in _CMSY_DELIMITER_GIDS
 
 # Accent glyph codepoint -> LaTeX accent command. Detected by x-overlap with the
-# following base glyph (handled in the structure pass).
+# following base glyph (handled in the structure pass). Both the spacing
+# modifier letters and the combining forms are listed, since ToUnicode maps
+# disagree on which one a font emits.
 ACCENT: dict[int, str] = {
     0x02C6: r"\hat",
+    0x0302: r"\hat",
     0x00AF: r"\bar",
     0x0304: r"\bar",
     0x02DC: r"\tilde",
+    0x0303: r"\tilde",
     0x02D9: r"\dot",
+    0x0307: r"\dot",
+    0x00A8: r"\ddot",
+    0x0308: r"\ddot",
+    0x02C7: r"\check",
+    0x030C: r"\check",
+    0x02D8: r"\breve",
+    0x0306: r"\breve",
+    0x00B4: r"\acute",
+    0x0301: r"\acute",
+    0x0300: r"\grave",
+    0x02DA: r"\mathring",
+    0x030A: r"\mathring",
     0x20D7: r"\vec",
 }
 
 # Font prefixes that mark a glyph as belonging to a math run rather than body
 # text. A glyph in any of these fonts is math; a CM-font glyph inside an
-# otherwise NimbusRom/Times line is inline math.
-MATH_FONT_PREFIXES = ("CM", "MSAM", "MSBM")
+# otherwise NimbusRom/Times line is inline math. Families whose name contains
+# "Math" (LMMathItalic, XITSMath, STIXTwoMath, TeXGyrePagellaMath, CambriaMath)
+# are math-only OpenType fonts and are matched in is_math_font as well.
+MATH_FONT_PREFIXES = ("CM", "MSAM", "MSBM", "LMMath", "EUSM", "EUFM", "EURM", "EURB")
+
+
+# ---------------------------------------------------------------------------
+# Unicode Mathematical Alphanumeric Symbols (U+1D400-U+1D7FF) + Greek/digit
+# runs. Unicode-math OpenType fonts (XITS Math, STIX Two Math, Latin Modern
+# Math under unicode-math, Cambria Math) report these codepoints directly via
+# ToUnicode, with the style encoded in the codepoint itself rather than in the
+# font family. Each run is mapped arithmetically back to its base letter plus
+# a style. Reserved holes in the block (e.g. U+1D455) never occur in real PDFs
+# because fonts emit the corresponding letterlike codepoint (U+210E) instead,
+# which UNI2TEX covers.
+# ---------------------------------------------------------------------------
+
+# Latin runs: 52 slots each (A-Z then a-z). (start, style) where style is one
+# of the _emit_row wrapper styles, or a \command{} template for styles the
+# wrapper machinery does not model (script/fraktur/monospace).
+_MATH_LATIN_RUNS: list[tuple[int, str]] = [
+    (0x1D400, "mathbf"),        # bold
+    (0x1D434, "italic_bare"),   # italic
+    (0x1D468, "mathbf"),        # bold italic (bold wins; \boldsymbol not used)
+    (0x1D49C, "mathcal"),       # script
+    (0x1D4D0, "mathcal"),       # bold script
+    (0x1D504, "mathfrak"),      # fraktur
+    (0x1D538, "mathbb"),        # double-struck
+    (0x1D56C, "mathfrak"),      # bold fraktur
+    (0x1D5A0, "upright"),       # sans-serif
+    (0x1D5D4, "mathbf"),        # sans-serif bold
+    (0x1D608, "italic_bare"),   # sans-serif italic
+    (0x1D63C, "mathbf"),        # sans-serif bold italic
+    (0x1D670, "mathtt"),        # monospace
+]
+
+# Greek runs: 58 slots each, laid out per the Unicode block: 25 capitals
+# (Alpha..Omega including the Theta symbol slot), nabla, 25 lowercase
+# (alpha..omega including final sigma), then partial/epsilon/theta/kappa/phi/
+# rho/pi variant symbols. Capitals whose shape coincides with a Latin letter
+# map to that letter.
+_MATH_GREEK_NAMES: tuple[str, ...] = (
+    "A", "B", r"\Gamma", r"\Delta", "E", "Z", "H", r"\Theta", "I", "K",
+    r"\Lambda", "M", "N", r"\Xi", "O", r"\Pi", "P", r"\Theta", r"\Sigma",
+    "T", r"\Upsilon", r"\Phi", "X", r"\Psi", r"\Omega", r"\nabla",
+    r"\alpha", r"\beta", r"\gamma", r"\delta", r"\varepsilon", r"\zeta",
+    r"\eta", r"\theta", r"\iota", r"\kappa", r"\lambda", r"\mu", r"\nu",
+    r"\xi", "o", r"\pi", r"\rho", r"\varsigma", r"\sigma", r"\tau",
+    r"\upsilon", r"\varphi", r"\chi", r"\psi", r"\omega",
+    r"\partial", r"\epsilon", r"\vartheta", r"\varkappa", r"\phi",
+    r"\varrho", r"\varpi",
+)
+
+_MATH_GREEK_RUNS: list[tuple[int, str]] = [
+    (0x1D6A8, "mathbf"),        # bold
+    (0x1D6E2, "italic_bare"),   # italic
+    (0x1D71C, "mathbf"),        # bold italic
+    (0x1D756, "mathbf"),        # sans-serif bold
+    (0x1D790, "mathbf"),        # sans-serif bold italic
+]
+
+# Digit runs: 10 slots each.
+_MATH_DIGIT_RUNS: list[int] = [
+    0x1D7CE,  # bold
+    0x1D7D8,  # double-struck
+    0x1D7E2,  # sans-serif
+    0x1D7EC,  # sans-serif bold
+    0x1D7F6,  # monospace
+]
+
+
+def _math_alphanumeric(codepoint: int) -> tuple[str, str] | None:
+    """Map a Mathematical Alphanumeric Symbols codepoint to ``(token, style)``.
+
+    Styles the wrapper machinery models (mathbf/mathbb/upright/italic_bare) are
+    returned as a bare letter plus that style; script/fraktur/monospace are
+    returned pre-wrapped (``\\mathcal{A}``) with the non-wrapping ``symbol``
+    style so :func:`_style_wrap` leaves them alone.
+    """
+    for start, style in _MATH_LATIN_RUNS:
+        offset = codepoint - start
+        if 0 <= offset < 52:
+            base = (
+                chr(ord("A") + offset)
+                if offset < 26
+                else chr(ord("a") + offset - 26)
+            )
+            if style in {"mathcal", "mathfrak", "mathtt"}:
+                return rf"\{style}{{{base}}}", "symbol"
+            return base, style
+    for start, style in _MATH_GREEK_RUNS:
+        offset = codepoint - start
+        if 0 <= offset < len(_MATH_GREEK_NAMES):
+            return _MATH_GREEK_NAMES[offset], style
+    for start in _MATH_DIGIT_RUNS:
+        offset = codepoint - start
+        if 0 <= offset < 10:
+            return chr(ord("0") + offset), "upright"
+    return None
 
 
 @lru_cache(maxsize=256)
@@ -187,7 +509,12 @@ def font_family(font: str) -> str:
 
 def is_math_font(font: str) -> bool:
     family = font_family(font)
-    return family.startswith(MATH_FONT_PREFIXES)
+    if family.startswith(MATH_FONT_PREFIXES):
+        return True
+    # OpenType math fonts advertise themselves with "Math" in the family name
+    # (XITSMath, STIXTwoMath, TeXGyrePagellaMath, CambriaMath, LatinModernMath);
+    # text fonts essentially never do.
+    return "Math" in font.split("+", 1)[-1]
 
 
 @lru_cache(maxsize=256)
@@ -221,12 +548,18 @@ def classify(glyph: MathGlyph) -> tuple[str, str]:
       2. (font_prefix, gid) in SLOT_OVERRIDE -> that token.
       3. rawdict char is a known non-ASCII symbol (UNI2TEX) -> that token.
       4. rawdict char is normal printable ASCII -> identity.
-      5. else raise MathRecoUnhandled (a defect to fix, never a silent drop).
+      5. rawdict char is a Mathematical Alphanumeric Symbols codepoint -> its
+         base letter with the style the codepoint encodes.
+      6. else raise MathRecoUnhandled (a defect to fix, never a silent drop).
     """
     family = font_family(glyph.font)
     style = style_for(glyph.font, glyph.flags)
 
     if family.startswith("CMEX"):
+        if len(glyph.char) == 1:
+            delimiter = _CMEX_SLOT_DELIMITERS.get(ord(glyph.char))
+            if delimiter is not None:
+                return delimiter, "symbol"
         return LARGEOP_PLACEHOLDER, "largeop"
 
     prefix = _font_prefix(glyph.font)
@@ -242,6 +575,9 @@ def classify(glyph: MathGlyph) -> tuple[str, str]:
             return ACCENT[codepoint], style
         if glyph.char.isprintable() and glyph.char != " " and codepoint < 0x7F:
             return glyph.char, style
+        mapped = _math_alphanumeric(codepoint)
+        if mapped is not None:
+            return mapped
 
     raise MathRecoUnhandled(glyph.font, glyph.gid, glyph.char)
 
@@ -473,7 +809,17 @@ def _is_accent(glyph: MathGlyph) -> bool:
 
 
 def _is_largeop(glyph: MathGlyph) -> bool:
-    return font_family(glyph.font).startswith("CMEX")
+    """True for a CMEX glyph that is a large operator (owns stacked limits).
+
+    A CMEX *delimiter* or *radical* slot is not an operator: it never claims
+    limits and is emitted (or, for a radical, resolved by its vinculum) like
+    any other glyph.
+    """
+    if not font_family(glyph.font).startswith("CMEX"):
+        return False
+    if len(glyph.char) == 1 and ord(glyph.char) in _CMEX_SLOT_DELIMITERS:
+        return False
+    return True
 
 
 def _row_size(glyphs: list[MathGlyph]) -> float:
@@ -559,6 +905,12 @@ def recognize_latex(glyphs: list[MathGlyph], rules: list[Rule] | None = None) ->
     equation-number column); ``rules`` are the drawn fraction/radical bars in the
     same coordinate space. The function never drops a content glyph: an
     unhandled glyph surfaces via :class:`MathRecoUnhandled` from :func:`classify`.
+
+    The expression is first split into vertical bands (stacked equation rows of
+    a multi-line display, joined with ``\\\\``); a fraction bar bridges its
+    numerator and denominator bands so a tall display fraction stays one band.
+    Each band is then recognised with fraction bars and radicals resolved
+    before the linear baseline walk.
     """
     rules = rules or []
     content = [g for g in glyphs if g.char and g.char != " "]
@@ -566,9 +918,331 @@ def recognize_latex(glyphs: list[MathGlyph], rules: list[Rule] | None = None) ->
         return ""
     if any(_is_underbrace_piece(g) for g in content):
         return _recognize_with_underbraces(content, rules).strip()
-    row_size = _row_size(content)
-    baseline = _dominant_baseline(content, row_size)
-    return _emit_row(content, rules, row_size, baseline).strip()
+    bands = _vertical_bands(content, rules)
+    parts: list[str] = []
+    for band_glyphs, band_rules in bands:
+        row_size = _row_size(band_glyphs)
+        baseline = _dominant_baseline(band_glyphs, row_size)
+        parts.append(
+            _emit_expression(band_glyphs, band_rules, row_size, baseline).strip()
+        )
+    return r" \\ ".join(part for part in parts if part).strip()
+
+
+def _vertical_bands(
+    glyphs: list[MathGlyph], rules: list[Rule]
+) -> list[tuple[list[MathGlyph], list[Rule]]]:
+    """Split an expression into vertically separated rows (bands).
+
+    Items (glyphs and rules together) are clustered bottom-up by y-extent: an
+    item joins the current band when its top is within ``gap`` of the band's
+    bottom. Including the rules makes a fraction bar bridge its numerator and
+    denominator (their boxes nearly touch the bar), so a display fraction never
+    splits, while genuinely stacked equation rows (>= one baselineskip apart)
+    do. A band whose glyphs are all script-size is a limits/decoration row, not
+    an equation row, and is merged into its nearest band.
+    """
+    row_size = _row_size(glyphs)
+    gap = max(1.5, 0.3 * row_size)
+
+    items: list[tuple[float, float, MathGlyph | None, Rule | None]] = [
+        (g.y0, g.y1, g, None) for g in glyphs
+    ] + [(r.y0 - 1.0, r.y1 + 1.0, None, r) for r in rules if r.horizontal]
+    items.sort(key=lambda item: item[0])
+
+    bands: list[dict[str, Any]] = []
+    current: dict[str, Any] | None = None
+    for y0, y1, glyph, rule in items:
+        if current is not None and y0 <= current["y1"] + gap:
+            current["y1"] = max(current["y1"], y1)
+        else:
+            current = {"y1": y1, "glyphs": [], "rules": []}
+            bands.append(current)
+        if glyph is not None:
+            current["glyphs"].append(glyph)
+        if rule is not None:
+            current["rules"].append(rule)
+
+    # Vertical rules were excluded from clustering; reattach each to the band
+    # whose y-extent its centre falls in (first match).
+    for rule in rules:
+        if rule.horizontal:
+            continue
+        for band in bands:
+            band_glyphs = band["glyphs"]
+            if not band_glyphs:
+                continue
+            top = min(g.y0 for g in band_glyphs)
+            bottom = max(g.y1 for g in band_glyphs)
+            if top - 2.0 <= rule.ycenter <= bottom + 2.0:
+                band["rules"].append(rule)
+                break
+
+    populated = [band for band in bands if band["glyphs"]]
+    if len(populated) <= 1:
+        return [(glyphs, rules)]
+
+    # A band with no body-size glyph is a stack of limits or labels that
+    # clustering separated from its operator row; merge it into the nearest
+    # populated band by y-distance.
+    def band_extent(band: dict[str, Any]) -> tuple[float, float]:
+        ys0 = [g.y0 for g in band["glyphs"]]
+        ys1 = [g.y1 for g in band["glyphs"]]
+        return min(ys0), max(ys1)
+
+    body: list[dict[str, Any]] = []
+    satellites: list[dict[str, Any]] = []
+    for band in populated:
+        if any(g.size >= 0.85 * row_size for g in band["glyphs"]):
+            body.append(band)
+        else:
+            satellites.append(band)
+    if not body:
+        return [(glyphs, rules)]
+    for satellite in satellites:
+        s_top, s_bottom = band_extent(satellite)
+        s_center = (s_top + s_bottom) / 2.0
+        nearest = min(
+            body,
+            key=lambda band: min(
+                abs(band_extent(band)[0] - s_center),
+                abs(band_extent(band)[1] - s_center),
+            ),
+        )
+        nearest["glyphs"].extend(satellite["glyphs"])
+        nearest["rules"].extend(satellite["rules"])
+    if len(body) == 1:
+        return [(glyphs, rules)]
+
+    body.sort(key=lambda band: band_extent(band)[0])
+    return [(band["glyphs"], band["rules"]) for band in body]
+
+
+def _emit_expression(
+    glyphs: list[MathGlyph],
+    rules: list[Rule],
+    row_size: float,
+    baseline: float,
+) -> str:
+    """Emit one expression, resolving fraction bars and radicals first.
+
+    A fraction bar (a horizontal rule with glyphs both above and below its
+    x-span) splits the glyphs into left / numerator / denominator / right;
+    numerator and denominator are recognised recursively on their own
+    baselines. A radical glyph with its vinculum rule wraps the glyphs under
+    the vinculum in ``\\sqrt{...}``. With no such structure the linear
+    baseline walk of :func:`_emit_row` applies.
+    """
+    if not glyphs:
+        return ""
+    bar = _pick_fraction_rule(glyphs, rules, row_size, baseline)
+    if bar is not None:
+        return _emit_fraction(glyphs, rules, bar, row_size, baseline)
+    radical = _pick_radical(glyphs, rules)
+    if radical is not None:
+        return _emit_radical(glyphs, rules, radical, row_size, baseline)
+    return _emit_row(glyphs, rules, row_size, baseline)
+
+
+def _pick_fraction_rule(
+    glyphs: list[MathGlyph],
+    rules: list[Rule],
+    row_size: float,
+    baseline: float,
+) -> Rule | None:
+    """The fraction bar to resolve first: nearest the math axis, then leftmost.
+
+    A candidate is a horizontal rule with at least one glyph above AND one
+    below within its x-span -- which excludes radical vinculums, overlines and
+    underlines (content on one side only). The math axis sits a little above
+    the baseline; an outer fraction bar lies on it while bars nested inside a
+    numerator/denominator sit farther away, so nearest-axis picks the outermost
+    bar and recursion resolves the nested ones. Sibling bars at the same depth
+    tie on the quantised distance and are taken left to right.
+    """
+    axis = baseline - 0.25 * row_size
+    tol = 1.5
+    candidates: list[tuple[float, float, Rule]] = []
+    for rule in rules:
+        if not rule.horizontal:
+            continue
+        above = False
+        below = False
+        for glyph in glyphs:
+            cx = (glyph.x0 + glyph.x1) / 2.0
+            if cx < rule.x0 - tol or cx > rule.x1 + tol:
+                continue
+            cy = (glyph.y0 + glyph.y1) / 2.0
+            if cy < rule.ycenter:
+                above = True
+            elif cy > rule.ycenter:
+                below = True
+            if above and below:
+                break
+        if above and below:
+            depth = round(abs(rule.ycenter - axis) / max(1.0, 0.5 * row_size))
+            candidates.append((depth, rule.x0, rule))
+    if not candidates:
+        return None
+    candidates.sort(key=lambda item: (item[0], item[1]))
+    return candidates[0][2]
+
+
+def _emit_fraction(
+    glyphs: list[MathGlyph],
+    rules: list[Rule],
+    bar: Rule,
+    row_size: float,
+    baseline: float,
+) -> str:
+    """Emit ``left \\frac{num}{den} right`` for the chosen fraction bar."""
+    tol = 1.5
+    left: list[MathGlyph] = []
+    right: list[MathGlyph] = []
+    numerator: list[MathGlyph] = []
+    denominator: list[MathGlyph] = []
+    for glyph in glyphs:
+        cx = (glyph.x0 + glyph.x1) / 2.0
+        if cx < bar.x0 - tol:
+            left.append(glyph)
+        elif cx > bar.x1 + tol:
+            right.append(glyph)
+        else:
+            cy = (glyph.y0 + glyph.y1) / 2.0
+            if cy < bar.ycenter:
+                numerator.append(glyph)
+            else:
+                denominator.append(glyph)
+
+    left_rules: list[Rule] = []
+    right_rules: list[Rule] = []
+    num_rules: list[Rule] = []
+    den_rules: list[Rule] = []
+    for rule in rules:
+        if rule is bar:
+            continue
+        cx = (rule.x0 + rule.x1) / 2.0
+        if cx < bar.x0 - tol:
+            left_rules.append(rule)
+        elif cx > bar.x1 + tol:
+            right_rules.append(rule)
+        elif rule.ycenter < bar.ycenter:
+            num_rules.append(rule)
+        else:
+            den_rules.append(rule)
+
+    def sub_expression(part: list[MathGlyph], part_rules: list[Rule]) -> str:
+        if not part:
+            return ""
+        part_size = _row_size(part)
+        part_baseline = _dominant_baseline(part, part_size)
+        return _emit_expression(part, part_rules, part_size, part_baseline).strip()
+
+    num_latex = sub_expression(numerator, num_rules)
+    den_latex = sub_expression(denominator, den_rules)
+    left_latex = (
+        _emit_expression(left, left_rules, row_size, baseline).strip() if left else ""
+    )
+    right_latex = (
+        _emit_expression(right, right_rules, row_size, baseline).strip()
+        if right
+        else ""
+    )
+    frac = rf"\frac{{{num_latex}}}{{{den_latex}}}"
+    return " ".join(piece for piece in (left_latex, frac, right_latex) if piece)
+
+
+def _is_radical_glyph(glyph: MathGlyph) -> bool:
+    """True for a radical-sign glyph (maps to the ``\\sqrt`` marker token)."""
+    try:
+        return classify(glyph)[0] == r"\sqrt"
+    except MathRecoUnhandled:
+        return False
+
+
+def _pick_radical(
+    glyphs: list[MathGlyph], rules: list[Rule]
+) -> tuple[MathGlyph, Rule] | None:
+    """The leftmost radical glyph paired with its vinculum rule.
+
+    The vinculum is the horizontal rule that starts at the radical's top-right
+    corner and extends over the radicand. A radical with no matching rule is
+    left for :func:`_emit_row` to emit as ``\\surd``.
+    """
+    radicals = sorted(
+        (g for g in glyphs if _is_radical_glyph(g)), key=lambda g: g.ox
+    )
+    for radical in radicals:
+        x_tol = max(3.0, 0.5 * radical.width)
+        for rule in rules:
+            if not rule.horizontal:
+                continue
+            if not (radical.x0 - 2.0 <= rule.x0 <= radical.x1 + x_tol):
+                continue
+            if rule.ycenter > radical.y0 + 0.5 * radical.height:
+                continue
+            if rule.x1 <= radical.x1 + 1.0:
+                continue
+            return radical, rule
+    return None
+
+
+def _emit_radical(
+    glyphs: list[MathGlyph],
+    rules: list[Rule],
+    radical: tuple[MathGlyph, Rule],
+    row_size: float,
+    baseline: float,
+) -> str:
+    """Emit ``left \\sqrt{radicand} right`` for the chosen radical+vinculum."""
+    sign, vinculum = radical
+    tol = 1.5
+    left: list[MathGlyph] = []
+    radicand: list[MathGlyph] = []
+    right: list[MathGlyph] = []
+    for glyph in glyphs:
+        if glyph is sign:
+            continue
+        cx = (glyph.x0 + glyph.x1) / 2.0
+        if cx < sign.x0 - tol:
+            left.append(glyph)
+        elif cx > vinculum.x1 + tol:
+            right.append(glyph)
+        else:
+            radicand.append(glyph)
+
+    left_rules: list[Rule] = []
+    inner_rules: list[Rule] = []
+    right_rules: list[Rule] = []
+    for rule in rules:
+        if rule is vinculum:
+            continue
+        cx = (rule.x0 + rule.x1) / 2.0
+        if cx < sign.x0 - tol:
+            left_rules.append(rule)
+        elif cx > vinculum.x1 + tol:
+            right_rules.append(rule)
+        else:
+            inner_rules.append(rule)
+
+    def sub_expression(part: list[MathGlyph], part_rules: list[Rule]) -> str:
+        if not part:
+            return ""
+        part_size = _row_size(part)
+        part_baseline = _dominant_baseline(part, part_size)
+        return _emit_expression(part, part_rules, part_size, part_baseline).strip()
+
+    body = sub_expression(radicand, inner_rules)
+    left_latex = (
+        _emit_expression(left, left_rules, row_size, baseline).strip() if left else ""
+    )
+    right_latex = (
+        _emit_expression(right, right_rules, row_size, baseline).strip()
+        if right
+        else ""
+    )
+    sqrt = rf"\sqrt{{{body}}}"
+    return " ".join(piece for piece in (left_latex, sqrt, right_latex) if piece)
 
 
 def _recognize_with_underbraces(glyphs: list[MathGlyph], rules: list[Rule]) -> str:
@@ -600,7 +1274,7 @@ def _recognize_with_underbraces(glyphs: list[MathGlyph], rules: list[Rule]) -> s
     # A brace pair is a contiguous run of brace pieces; group them by x-gap.
     spans = _underbrace_spans(braces, row_size)
     if not spans:
-        return _emit_row(main_content, rules, row_size, baseline).strip()
+        return _emit_expression(main_content, rules, row_size, baseline).strip()
 
     # Recognise the run as alternating plain segments and \underbrace segments,
     # cut at each brace span's x extent. Membership of a segment is by glyph
@@ -616,16 +1290,16 @@ def _recognize_with_underbraces(glyphs: list[MathGlyph], rules: list[Rule]) -> s
         before = [g for g in main_content if prev_x < center(g) < span_x0]
         spanned = [g for g in main_content if span_x0 <= center(g) <= span_x1]
         if before:
-            pieces.append(_emit_row(before, rules, row_size, baseline).strip())
+            pieces.append(_emit_expression(before, rules, row_size, baseline).strip())
         if spanned:
             label = _underbrace_label(label_glyphs, span_x0, span_x1)
-            body = _emit_row(spanned, rules, row_size, baseline).strip()
+            body = _emit_expression(spanned, rules, row_size, baseline).strip()
             tail = rf"_{{\text{{{label}}}}}" if label else ""
             pieces.append(rf"\underbrace{{{body}}}{tail}")
         prev_x = span_x1
     trailing = [g for g in main_content if center(g) > prev_x]
     if trailing:
-        pieces.append(_emit_row(trailing, rules, row_size, baseline).strip())
+        pieces.append(_emit_expression(trailing, rules, row_size, baseline).strip())
     return " ".join(piece for piece in pieces if piece).strip()
 
 
@@ -771,6 +1445,10 @@ def _emit_row(
             continue
 
         token = _token_of(glyph)
+        if token == r"\sqrt":
+            # A radical whose vinculum was not found (or a bare radical sign)
+            # cannot wrap anything here; emit the standalone radical symbol.
+            token = r"\surd"
         style = classify(glyph)[1]
         wrapped_single = _style_wrap(token, style)
 
@@ -982,7 +1660,16 @@ def _emit_largeop(
 
 
 def _largeop_command(op: MathGlyph) -> str:
-    """Resolve the LaTeX command for a CMEX large operator by glyph id."""
+    """Resolve the LaTeX command for a CMEX large operator.
+
+    The rawdict char carries the OMX encoding slot (reliable on both sample
+    papers), the texttrace glyph id is a legacy fallback, and the placeholder
+    covers anything else.
+    """
+    if len(op.char) == 1:
+        cmd = _CMEX_SLOT_LARGEOPS.get(ord(op.char))
+        if cmd is not None:
+            return cmd
     cmd = _LARGEOP_BY_GID.get(op.gid)
     if cmd is not None:
         return cmd
@@ -1029,8 +1716,11 @@ _STRUCTURAL_COMMANDS = frozenset(
         r"\mathit",
         r"\mathbb",
         r"\mathcal",
+        r"\mathfrak",
+        r"\mathtt",
         r"\frac",
         r"\sqrt",
+        r"\surd",
         r"\underbrace",
         r"\text",
         r"\left",
@@ -1157,6 +1847,64 @@ _BODY_LEFT_RATIO = 0.22
 # size even when set in a text font (e.g. the nested 'hid' of d_{hid}).
 _SATELLITE_SIZE_RATIO = 0.75
 
+# Font families that are *exclusively* math, never body text. CMR/CMBX are
+# deliberately absent: they set math digits/relations but also the body prose
+# and headings of any pure-CM document, so they cannot witness "this line is an
+# equation" on their own. Used by the unnumbered display-equation detector.
+_STRICT_MATH_PREFIXES = ("CMMI", "CMSY", "CMEX", "MSAM", "MSBM", "LMMath")
+
+# Minimum fraction of a line's glyph width set in strictly-math fonts for the
+# line to qualify as an unnumbered display equation. Display equations carry
+# their variables/relations in CMMI/CMSY (typically >=30% of the width); prose
+# with embedded inline math stays well below.
+_STANDALONE_MATH_DENSITY = 0.25
+
+# Maximum vertical gap (in body sizes) between consecutive lines of one
+# unnumbered display-equation group.
+_STANDALONE_GROUP_GAP_RATIO = 1.2
+
+# Minimum content glyphs for an unnumbered group. A wrapped fragment of inline
+# math ("⊂ Rd," / ", ..., x′") is short; a genuine display equation is not.
+_STANDALONE_MIN_GLYPHS = 8
+
+# Relation tokens that witness "this group states an equation/relation". An
+# unnumbered group must contain one of these, a large operator, or a fraction
+# bar -- a run of bare symbols (", ..., x′") is a wrapped inline fragment.
+_RELATION_TOKENS = frozenset(
+    {
+        "=", "<", ">",
+        r"\leq", r"\geq", r"\neq", r"\equiv", r"\sim", r"\simeq", r"\cong",
+        r"\approx", r"\asymp", r"\propto", r"\ll", r"\gg", r"\prec", r"\succ",
+        r"\preceq", r"\succeq", r"\in", r"\notin", r"\ni", r"\subset",
+        r"\supset", r"\subseteq", r"\supseteq", r"\rightarrow", r"\leftarrow",
+        r"\leftrightarrow", r"\Rightarrow", r"\Leftarrow", r"\Leftrightarrow",
+        r"\mapsto", r"\longrightarrow", r"\Longrightarrow", r"\models",
+        r"\vdash", r"\dashv",
+    }
+)
+
+# An anchored (numbered) equation claims the eq-lines within this many body
+# sizes of its number's baseline; anything farther belongs to an unnumbered
+# group instead of being swallowed by a distant anchor.
+_ANCHOR_WINDOW_RATIO = 5.0
+
+
+def _is_strict_math_font(font: str) -> bool:
+    """True only for families that never set body text (CMMI/CMSY/CMEX...)."""
+    family = font_family(font)
+    if family.startswith(_STRICT_MATH_PREFIXES):
+        return True
+    return "Math" in font.split("+", 1)[-1]
+
+
+def _strict_math_density(line: "_RawLine") -> float:
+    """Fraction of the line's glyph width set in strictly-math fonts."""
+    total = sum(g.width for g in line.glyphs)
+    if total <= 0:
+        return 0.0
+    math_width = sum(g.width for g in line.glyphs if _is_strict_math_font(g.font))
+    return math_width / total
+
 
 @dataclass(frozen=True)
 class MathRegion:
@@ -1167,6 +1915,9 @@ class MathRegion:
     are the ``PageLayout.line`` indices this region was reconstructed from, so
     markdown can suppress them. ``number`` is the parenthesised equation label
     when present (otherwise ``None``); the default emission omits it.
+    ``source_text`` is the raw glyph characters of the run in reading order;
+    markdown uses it to splice the LaTeX into a word the region only partially
+    covers (e.g. the "ℓ4" of "ℓ4-norm").
     """
 
     page: int
@@ -1175,6 +1926,7 @@ class MathRegion:
     kind: str
     source_line_indices: tuple[int, ...] = ()
     number: str | None = None
+    source_text: str = ""
 
 
 @dataclass(frozen=True)
@@ -1317,12 +2069,14 @@ def _detect_display_regions(
 ) -> list[tuple[BBox, str, str | None, list[MathGlyph]]]:
     """Detect display-equation regions on one page.
 
-    Returns ``(bbox, latex, number, glyphs)`` tuples. Each region is anchored on
-    a parenthesised equation number; equation lines are assigned to the nearest
-    anchor baseline, so vertically-stacked equations stay separate. Pages with no
-    equation number are skipped (the sample's numbered equations are the targets;
-    an unnumbered display equation is a defect to extend this anchor logic for,
-    never a silent drop).
+    Returns ``(bbox, latex, number, glyphs)`` tuples. A numbered equation is
+    anchored on its parenthesised right-margin number; eq-lines within the
+    anchor window are assigned to the nearest anchor baseline so
+    vertically-stacked equations stay separate. Eq-lines far from every anchor
+    -- and every eq-line on a page with no anchors at all -- form *unnumbered*
+    regions instead, grouped by vertical proximity. The unnumbered path demands
+    a strictly-math-font density on each line (CMMI/CMSY/..., never CMR/CMBX)
+    so indented prose or a bold heading is never promoted to an equation.
     """
     anchors = [
         (line.ycenter, number)
@@ -1330,8 +2084,6 @@ def _detect_display_regions(
         for number in (_is_eqnum_line(line, page_width),)
         if number is not None
     ]
-    if not anchors:
-        return []
     anchors.sort()
     anchor_oys = [oy for oy, _ in anchors]
 
@@ -1344,16 +2096,29 @@ def _detect_display_regions(
     if not eq_lines:
         return []
 
-    groups: dict[int, list[_RawLine]] = {i: [] for i in range(len(anchors))}
+    window = _ANCHOR_WINDOW_RATIO * body_size
+    anchored: dict[int, list[_RawLine]] = {i: [] for i in range(len(anchors))}
+    leftover: list[_RawLine] = []
     for line in eq_lines:
-        nearest = min(
-            range(len(anchor_oys)), key=lambda k: abs(anchor_oys[k] - line.ycenter)
-        )
-        groups[nearest].append(line)
+        if anchor_oys:
+            nearest = min(
+                range(len(anchor_oys)), key=lambda k: abs(anchor_oys[k] - line.ycenter)
+            )
+            if abs(anchor_oys[nearest] - line.ycenter) <= window:
+                anchored[nearest].append(line)
+                continue
+        leftover.append(line)
+
+    groups: list[tuple[str | None, list[_RawLine]]] = [
+        (number, anchored[index]) for index, (_, number) in enumerate(anchors)
+    ]
+    groups.extend(
+        (None, member_lines)
+        for member_lines in _group_unnumbered_lines(leftover, body_size, lines, rules)
+    )
 
     regions: list[tuple[BBox, str, str | None, list[MathGlyph]]] = []
-    for index, (_, number) in enumerate(anchors):
-        member_lines = groups[index]
+    for number, member_lines in groups:
         if not member_lines:
             continue
         glyphs = [g for line in member_lines for g in line.glyphs]
@@ -1382,7 +2147,96 @@ def _detect_display_regions(
             y1,
         )
         regions.append((bbox, latex, number, glyphs))
+    regions.sort(key=lambda item: (item[0].y0, item[0].x0))
     return regions
+
+
+def _group_unnumbered_lines(
+    leftover: list[_RawLine],
+    body_size: float,
+    all_lines: list[_RawLine],
+    rules: list[Rule],
+) -> list[list[_RawLine]]:
+    """Group anchor-less eq-lines into unnumbered display-equation regions.
+
+    Each line must individually clear the strict math-font density bar; the
+    survivors are grouped by vertical proximity, and a group also breaks where
+    any other line (prose, a label) sits vertically between two candidates --
+    two stacked equations separated by a sentence are two regions, not one.
+    A group must carry at least one body-size strictly-math glyph that is real
+    content (not a bare CMSY delimiter), enough glyphs to be more than a
+    wrapped inline fragment, and an equation witness (a relation glyph, a
+    large operator, or a fraction bar) so stray fragments never become an
+    equation block.
+    """
+    candidates = sorted(
+        (
+            line
+            for line in leftover
+            if _strict_math_density(line) >= _STANDALONE_MATH_DENSITY
+        ),
+        key=lambda line: line.y0,
+    )
+    if not candidates:
+        return []
+
+    candidate_ids = {id(line) for line in candidates}
+    blocker_centers = sorted(
+        line.ycenter for line in all_lines if id(line) not in candidate_ids
+    )
+
+    def blocked_between(bottom: float, top: float) -> bool:
+        return any(bottom < center < top for center in blocker_centers)
+
+    max_gap = _STANDALONE_GROUP_GAP_RATIO * body_size
+    grouped: list[list[_RawLine]] = []
+    current: list[_RawLine] = []
+    for line in candidates:
+        if current:
+            bottom = max(prev.y1 for prev in current)
+            if line.y0 - bottom > max_gap or blocked_between(bottom, line.y0):
+                grouped.append(current)
+                current = []
+        current.append(line)
+    if current:
+        grouped.append(current)
+
+    def has_content_math(member_lines: list[_RawLine]) -> bool:
+        return any(
+            _is_strict_math_font(g.font)
+            and g.size >= _SATELLITE_SIZE_RATIO * body_size
+            and not _is_math_delimiter_glyph(g)
+            for line in member_lines
+            for g in line.glyphs
+        )
+
+    def glyph_count(member_lines: list[_RawLine]) -> int:
+        return sum(len(line.glyphs) for line in member_lines)
+
+    def has_equation_witness(member_lines: list[_RawLine]) -> bool:
+        y0 = min(line.y0 for line in member_lines)
+        y1 = max(line.y1 for line in member_lines)
+        if any(r.horizontal and y0 <= r.ycenter <= y1 for r in rules):
+            return True
+        for line in member_lines:
+            for glyph in line.glyphs:
+                if _is_largeop(glyph):
+                    return True
+                try:
+                    token = classify(glyph)[0]
+                except MathRecoUnhandled:
+                    continue
+                if token in _RELATION_TOKENS:
+                    return True
+        return False
+
+    return [
+        member_lines
+        for member_lines in grouped
+        if has_content_math(member_lines)
+        and glyph_count(member_lines) >= _STANDALONE_MIN_GLYPHS
+        and has_equation_witness(member_lines)
+    ]
 
 
 def _detect_inline_regions(
@@ -1542,11 +2396,14 @@ def reconstruct_math(pdf_path: str | Any, pages: list[Any]) -> dict[int, MathRes
 
             inline: list[MathRegion] = []
             display_bboxes = [region.bbox for region in display]
-            for bbox, latex, _glyphs in _detect_inline_regions(lines, body_size):
+            for bbox, latex, run_glyphs in _detect_inline_regions(lines, body_size):
                 if any(bbox.intersects(other) for other in display_bboxes):
                     continue
                 containing = _containing_line_index(bbox, page_lines)
                 indices = (containing,) if containing is not None else ()
+                source_text = "".join(
+                    g.char for g in sorted(run_glyphs, key=lambda g: g.ox)
+                )
                 inline.append(
                     MathRegion(
                         page=page.number,
@@ -1555,6 +2412,7 @@ def reconstruct_math(pdf_path: str | Any, pages: list[Any]) -> dict[int, MathRes
                         kind="inline",
                         source_line_indices=indices,
                         number=None,
+                        source_text=source_text,
                     )
                 )
 
