@@ -9,7 +9,7 @@ description = "CPU-only PDF to Markdown converter focused on layout-aware text P
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
-authors = [{ name = "Codex" }]
+authors = [{ name = "Kota Munaoka" }]
 dependencies = ["pymupdf>=1.24"]
 
 [project.optional-dependencies]
