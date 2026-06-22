@@ -42,7 +42,7 @@ Most behavior worth changing is in two files of geometry heuristics, not in extr
 ## Conventions and gotchas
 
 - **Artifact extraction always requires PyMuPDF** (`fitz`), regardless of `--text-engine`. OCR and the Poppler engine require external binaries (`pdftoppm`/`pdftotext`/`tesseract`), not Python packages.
-- `--artifact-mode {off,manifest,embed,both}` is the current control; `--extract-artifacts` is a deprecated alias for `manifest`. Passing `--manifest`/`--assets-dir` while mode is `off` promotes it to `manifest` (see `cli.main`).
+- `--artifact-mode {off,manifest,embed,both}` is the control. When mode is `off`, an artifact-related flag given on its own promotes it: `--inline-images` → `embed`, `--manifest`/`--assets-dir` → `manifest` (see `cli.main`).
 - `--jobs 0` (default) runs serially under 16 pages, else fans out via `ProcessPoolExecutor` (`_effective_render_jobs`). Worker tasks re-open the PDF per process.
 - Public API surface (`__init__.py`): `convert_pdf`, `convert_pdf_to_result`, `ConversionOptions`, `ConversionResult`. The CLI is a thin wrapper that maps argparse flags onto `ConversionOptions`.
 - `pyproject.toml` requires Python ≥3.10; `.python-version` pins 3.12.

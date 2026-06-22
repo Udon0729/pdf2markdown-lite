@@ -99,7 +99,7 @@ Equations are always reconstructed as deterministic LaTeX from the glyph stream 
 - `--artifact-dpi N` — render DPI for figure crops (default 180).
 - `--jobs N` — `0` (default) runs serially for short PDFs and fans out across CPU processes for longer artifact-extraction jobs; `1` forces serial.
 
-`--extract-artifacts` is kept as a compatibility alias for `--artifact-mode manifest`.
+Passing `--inline-images` on its own turns on figure embedding; `--manifest` or `--assets-dir` on its own turns on the manifest sidecar.
 
 ## How it works
 

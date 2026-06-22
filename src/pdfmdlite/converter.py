@@ -27,7 +27,6 @@ class ConversionOptions:
     first_page: int | None = None
     last_page: int | None = None
     artifact_mode: str = "off"
-    extract_artifacts: bool = False
     assets_dir: Path | None = None
     asset_base_dir: Path | None = None
     artifact_dpi: int = 180
@@ -82,7 +81,7 @@ def convert_pdf_to_result(
     math_results = reconstruct_math(pdf_path, document.pages)
 
     artifacts: list[VisualArtifact] = []
-    if options.extract_artifacts or options.artifact_mode != "off":
+    if options.artifact_mode != "off":
         artifacts = extract_artifacts(
             pdf_path,
             document.pages,

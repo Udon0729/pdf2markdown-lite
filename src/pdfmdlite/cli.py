@@ -62,11 +62,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="Last 1-based page to process. Useful for chunking large PDFs.",
     )
     parser.add_argument(
-        "--extract-artifacts",
-        action="store_true",
-        help="Deprecated alias for --artifact-mode manifest.",
-    )
-    parser.add_argument(
         "--artifact-mode",
         choices=("off", "manifest", "embed", "both"),
         default="off",
@@ -136,12 +131,15 @@ def main(argv: list[str] | None = None) -> int:
     if args.jobs < 0:
         parser.error("--jobs must be 0 or greater")
 
+    # An artifact-related flag given on its own implies "turn extraction on":
+    # --inline-images means a self-contained .md with figures (embed), while a
+    # --manifest/--assets-dir path means the sidecar (manifest).
     artifact_mode = args.artifact_mode
-    if (
-        artifact_mode == "off"
-        and (args.extract_artifacts or args.manifest is not None or args.assets_dir is not None)
-    ):
-        artifact_mode = "manifest"
+    if artifact_mode == "off":
+        if args.inline_images:
+            artifact_mode = "embed"
+        elif args.manifest is not None or args.assets_dir is not None:
+            artifact_mode = "manifest"
 
     assets_dir = args.assets_dir
     manifest_path = args.manifest
@@ -172,7 +170,6 @@ def main(argv: list[str] | None = None) -> int:
         first_page=args.first_page,
         last_page=args.last_page,
         artifact_mode=artifact_mode,
-        extract_artifacts=args.extract_artifacts,
         assets_dir=assets_dir,
         asset_base_dir=asset_base_dir,
         artifact_dpi=args.artifact_dpi,

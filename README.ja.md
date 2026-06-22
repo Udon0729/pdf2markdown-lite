@@ -109,7 +109,7 @@ uv run --no-editable pdfmdlite book.pdf -o chunk-001.md --first-page 1 --last-pa
 | `--artifact-dpi N` | 図を切り出す解像度を指定します。標準は `180` です。 |
 | `--jobs N` | 並列処理数を指定します。`0` は自動設定です。 |
 
-`--extract-artifacts` は、`--artifact-mode manifest` と同じ意味の互換オプションです。
+`--inline-images` を単独で指定すると図の埋め込みが有効になり、`--manifest` または `--assets-dir` を単独で指定すると manifest の出力が有効になります。
 
 ## 仕組み
 

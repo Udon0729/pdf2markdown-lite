@@ -182,7 +182,7 @@ def extract_artifacts(
         import fitz  # type: ignore[import-not-found]
     except ImportError as exc:
         raise RuntimeError(
-            "PyMuPDF is required for --extract-artifacts. "
+            "PyMuPDF is required for artifact extraction (--artifact-mode). "
             "Install it with `python3 -m pip install 'pdfmdlite[figures]'`."
         ) from exc
 
