@@ -1,4 +1,4 @@
-# pdfmdlite
+# pdf2markdown-lite
 
 > 日本語版: [README.ja.md](README.ja.md)
 
