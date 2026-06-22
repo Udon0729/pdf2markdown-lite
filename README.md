@@ -88,7 +88,8 @@ uv run --no-editable pdfmdlite book.pdf -o chunk-001.md --first-page 1 --last-pa
 
 ### Key options
 
-- `--math {on,off}` — `on` (default) reconstructs deterministic LaTeX from the glyph stream. `off` falls back to the legacy character-heuristic formula path.
+Equations are always reconstructed as deterministic LaTeX from the glyph stream (display math as fenced ` ```math ` blocks, inline math as `$...$`); there is no flag to disable it.
+
 - `--artifact-mode {off,manifest,embed,both}` — `off` (default) is text-only (equations are still LaTeX). `manifest` writes figure crops + `*.artifacts.json` without touching the Markdown. `embed` reconstructs tables as Markdown and embeds figure crops at their caption anchor. `both` does `embed` plus the JSON manifest. Tables become Markdown pipe tables and equations become LaTeX in `embed`/`both`.
 - `--inline-images` — embed figure PNGs in the Markdown as base64 data URIs (self-contained file); no asset files or assets directory are written.
 - `--ocr {off,auto,force}` and `--ocr-lang LANG` — OCR mode and Tesseract language. `auto` OCRs only pages whose embedded text is below a threshold.

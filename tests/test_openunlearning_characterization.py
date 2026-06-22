@@ -49,7 +49,7 @@ def _run_text() -> str:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         result = convert_pdf_to_result(
-            PDF_PATH, ConversionOptions(math="on", artifact_mode="off")
+            PDF_PATH, ConversionOptions(artifact_mode="off")
         )
     return result.markdown
 
@@ -62,7 +62,6 @@ def _run_artifacts() -> list[dict[str, Any]]:
             result = convert_pdf_to_result(
                 PDF_PATH,
                 ConversionOptions(
-                    math="on",
                     artifact_mode="both",
                     jobs=1,
                     assets_dir=Path(tmp) / "assets",

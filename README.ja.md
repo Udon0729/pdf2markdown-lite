@@ -95,9 +95,10 @@ uv run --no-editable pdfmdlite book.pdf -o chunk-001.md --first-page 1 --last-pa
 
 ## 主なオプション
 
+数式は常に LaTeX として復元されます（ディスプレイ数式は ` ```math ` ブロック、インライン数式は `$...$`）。無効化するオプションはありません。
+
 | オプション | 説明 |
 |---|---|
-| `--math {on,off}` | 数式を LaTeX として復元します。標準は `on` です。 |
 | `--artifact-mode {off,manifest,embed,both}` | 図・表・数式の抽出方法を指定します。 |
 | `--inline-images` | 図を base64 として Markdown に埋め込みます。 |
 | `--ocr {off,auto,force}` | OCR の使用方法を指定します。 |

@@ -9,7 +9,7 @@ from .artifacts import (
 )
 from .layout import remove_repeating_marginalia
 from .markdown import render_markdown
-from .mathreco import MathResult, reconstruct_math
+from .mathreco import reconstruct_math
 from .ocr import ocr_page_to_layout
 from .poppler import PopplerError, extract_layout as extract_poppler_layout
 from .pymupdf_text import extract_layout as extract_pymupdf_layout
@@ -32,7 +32,6 @@ class ConversionOptions:
     asset_base_dir: Path | None = None
     artifact_dpi: int = 180
     jobs: int = 0
-    math: str = "on"
     inline_images: bool = False
 
 
@@ -66,8 +65,6 @@ def convert_pdf_to_result(
         raise ValueError(
             "artifact_mode must be one of: off, manifest, embed, both"
         )
-    if options.math not in {"on", "off"}:
-        raise ValueError("math must be one of: on, off")
 
     document = _extract_document_layout(pdf_path, options)
 
@@ -82,9 +79,7 @@ def convert_pdf_to_result(
     if options.strip_headers:
         remove_repeating_marginalia(document.pages)
 
-    math_results: dict[int, MathResult] = {}
-    if options.math == "on":
-        math_results = reconstruct_math(pdf_path, document.pages)
+    math_results = reconstruct_math(pdf_path, document.pages)
 
     artifacts: list[VisualArtifact] = []
     if options.extract_artifacts or options.artifact_mode != "off":

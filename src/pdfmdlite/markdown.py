@@ -43,11 +43,9 @@ def render_markdown(
 ) -> str:
     """Render pages to Markdown.
 
-    When ``math_results`` is provided (the default pipeline), display equations
-    are emitted as fenced ``math`` blocks of reconstructed LaTeX and inline math
-    as ``$...$``; the source glyph lines are suppressed so nothing is emitted
-    twice. When ``math_results`` is ``None`` (math disabled), the legacy
-    character-heuristic formula path is used so existing behaviour is preserved.
+    Display equations are emitted as fenced ``math`` blocks of reconstructed
+    LaTeX and inline math as ``$...$``; the source glyph lines are suppressed so
+    nothing is emitted twice.
     """
     parts: list[str] = []
     document_median_height = _document_median_word_height(pages)
@@ -64,7 +62,6 @@ def render_markdown(
             artifacts=artifacts_by_page.get(page.number, []),
             asset_base_dir=base_dir,
             page_width=page.width,
-            math_enabled=math_results is not None,
             page_math=page_math,
             page_lines=page.lines,
             inline_images=inline_images,
@@ -151,14 +148,12 @@ def _render_page(
     artifacts: list[Any],
     asset_base_dir: Path | None,
     page_width: float = 0.0,
-    math_enabled: bool = False,
     page_math: Any | None = None,
     page_lines: list[Line] | None = None,
     inline_images: bool = False,
 ) -> str:
     blocks: list[str] = []
     paragraph: list[str] = []
-    formula: list[str] = []
     paragraph_key: tuple[int, int, str] | None = None
     index = 0
     anchored_artifacts = _anchored_artifacts(artifacts)
@@ -173,7 +168,7 @@ def _render_page(
     display_by_anchor: dict[int, list[str]] = {}
     math_suppressed: set[int] = set()
     inline_by_anchor: dict[int, list[Any]] = {}
-    if math_enabled and page_math is not None and page_lines is not None:
+    if page_math is not None and page_lines is not None:
         position_of = {id(line): pos for pos, line in enumerate(lines)}
         for region in getattr(page_math, "display", ()):  # type: ignore[union-attr]
             positions = [
@@ -206,7 +201,6 @@ def _render_page(
     def emit_display_math(line_index: int) -> None:
         for latex in display_by_anchor.get(line_index, []):
             flush_paragraph()
-            flush_formula()
             blocks.append("```math\n" + latex + "\n```")
 
     def flush_paragraph() -> None:
@@ -216,16 +210,6 @@ def _render_page(
             paragraph = []
             paragraph_key = None
 
-    def flush_formula() -> None:
-        nonlocal formula
-        if formula:
-            inner = "\n".join(formula).strip()
-            # A block that as a whole is only a stray symbol, single short
-            # token, or bare equation number is noise, not an equation.
-            if inner and not _is_trivial_formula_token(inner):
-                blocks.append("```math\n" + inner + "\n```")
-            formula = []
-
     def emit_artifacts_for_line(line_index: int) -> None:
         for artifact in anchored_artifacts.get(line_index, []):
             artifact_id = _artifact_identity(artifact)
@@ -234,14 +218,12 @@ def _render_page(
             snippet = _artifact_markdown(artifact, asset_base_dir, inline_images)
             if snippet:
                 flush_paragraph()
-                flush_formula()
                 blocks.append(snippet)
                 emitted_artifact_ids.add(artifact_id)
 
     while index < len(lines):
         if index in suppressed_line_indices:
             flush_paragraph()
-            flush_formula()
             emit_display_math(index)
             emit_artifacts_for_line(index)
             index += 1
@@ -251,7 +233,6 @@ def _render_page(
         # as glyph text: suppress it and emit the fenced math block at its anchor.
         if index in math_suppressed:
             flush_paragraph()
-            flush_formula()
             emit_display_math(index)
             emit_artifacts_for_line(index)
             index += 1
@@ -261,7 +242,6 @@ def _render_page(
             table, consumed = _try_render_table(lines, index, table_blocked)
             if table:
                 flush_paragraph()
-                flush_formula()
                 blocks.append(table)
                 for table_index in range(index, index + consumed):
                     emit_artifacts_for_line(table_index)
@@ -272,13 +252,11 @@ def _render_page(
         text = line.text.strip()
         if not text:
             flush_paragraph()
-            flush_formula()
             index += 1
             continue
 
         if _is_rotated_marginal_stamp(line, page_width, median_word_height):
             flush_paragraph()
-            flush_formula()
             emit_artifacts_for_line(index)
             index += 1
             continue
@@ -294,7 +272,6 @@ def _render_page(
             and line.x_min >= page_width * 0.78
         ):
             flush_paragraph()
-            flush_formula()
             emit_artifacts_for_line(index)
             index += 1
             continue
@@ -303,7 +280,6 @@ def _render_page(
             lines, index, median_word_height, suppressed_line_indices
         ):
             flush_paragraph()
-            flush_formula()
             heading_level = _heading_level(lines[index + 1], median_word_height)
             heading_text, consumed = _collect_heading(
                 lines, index + 1, median_word_height, page_width, suppressed_line_indices
@@ -314,57 +290,33 @@ def _render_page(
             index += 1 + consumed
             continue
 
-        if not math_enabled and _is_formula_line(text):
+        heading_level = _heading_level(line, median_word_height)
+        if heading_level:
             flush_paragraph()
-            # Greedily absorb the rest of this display-equation cluster: the
-            # short fragments (a lone "=", "M T c", "cifi") and decoration that
-            # share the equation's right column and vertical band, so one
-            # equation becomes one block instead of a scatter of one-token
-            # fences. Standalone equation-number tokens are dropped. This legacy
-            # character-heuristic path is used ONLY when math reconstruction is
-            # off; with math on, display equations come from `math_suppressed`.
-            consumed = _consume_equation_cluster(
-                lines,
-                index,
-                formula,
-                median_word_height,
-                page_width,
-                suppressed_line_indices,
+            heading_text, consumed = _collect_heading(
+                lines, index, median_word_height, page_width, suppressed_line_indices
             )
+            blocks.append(f"{'#' * heading_level} {heading_text}")
             for consumed_index in range(index, index + consumed):
                 emit_artifacts_for_line(consumed_index)
             index += consumed
             continue
+        elif _is_list_item(text):
+            flush_paragraph()
+            blocks.append(_normalize_list_item(text))
         else:
-            flush_formula()
-            heading_level = _heading_level(line, median_word_height)
-            if heading_level:
+            if paragraph_key is not None and line.block_key != paragraph_key:
                 flush_paragraph()
-                heading_text, consumed = _collect_heading(
-                    lines, index, median_word_height, page_width, suppressed_line_indices
-                )
-                blocks.append(f"{'#' * heading_level} {heading_text}")
-                for consumed_index in range(index, index + consumed):
-                    emit_artifacts_for_line(consumed_index)
-                index += consumed
-                continue
-            elif _is_list_item(text):
-                flush_paragraph()
-                blocks.append(_normalize_list_item(text))
+            line_regions = inline_by_anchor.get(index)
+            if line_regions:
+                paragraph.append(_splice_inline_math(line, line_regions))
             else:
-                if paragraph_key is not None and line.block_key != paragraph_key:
-                    flush_paragraph()
-                line_regions = inline_by_anchor.get(index)
-                if line_regions:
-                    paragraph.append(_splice_inline_math(line, line_regions))
-                else:
-                    paragraph.append(text)
-                paragraph_key = line.block_key
+                paragraph.append(text)
+            paragraph_key = line.block_key
         emit_artifacts_for_line(index)
         index += 1
 
     flush_paragraph()
-    flush_formula()
     for artifact in artifacts:
         artifact_id = _artifact_identity(artifact)
         if artifact_id in emitted_artifact_ids:
@@ -515,87 +467,6 @@ def _is_formula_line(text: str) -> bool:
     if len(text) <= 90 and (symbolish >= 2 or math_count >= 2):
         return True
     if len(tokens) <= 8 and math_count >= 1 and alpha_chars <= 28:
-        return True
-    return False
-
-
-def _consume_equation_cluster(
-    lines: list[Line],
-    start: int,
-    formula: list[str],
-    median_word_height: float,
-    page_width: float,
-    suppressed_line_indices: set[int],
-) -> int:
-    """Append a contiguous display-equation cluster onto ``formula``.
-
-    Starting from the formula line at ``start``, absorb the short fragments
-    that share its right-column / vertical band (the rest of the equation,
-    plus stray ``=``/``M T c``/``cifi`` tokens that PDF extraction scattered).
-    Standalone equation-number tokens (``(1)``) are consumed but dropped.
-    Returns the number of source lines consumed (always >= 1).
-    """
-    first = lines[start]
-    if not _is_trivial_formula_token(first.text.strip()):
-        formula.append(first.text.strip())
-    elif not EQUATION_NUMBER_RE.match(first.text.strip()):
-        formula.append(first.text.strip())
-    consumed = 1
-    band_gap = max(12.0, 1.8 * median_word_height) if median_word_height else 18.0
-    full_width = page_width * 0.55 if page_width else float("inf")
-    right_column = page_width * 0.35 if page_width else 0.0
-    previous = first
-
-    j = start + 1
-    while j < len(lines):
-        if j in suppressed_line_indices:
-            break
-        candidate = lines[j]
-        text = candidate.text.strip()
-        if not text:
-            break
-        # Lines are top-to-bottom; a small row-to-row step keeps us in the
-        # same equation, a big downward jump ends it. Same-row fragments have
-        # a near-zero step, so compare top edges, not the inter-line gap.
-        row_step = candidate.y_min - previous.y_min
-        if row_step > band_gap or row_step < -band_gap:
-            break
-        # A wide prose line, a heading, or a list item ends the cluster.
-        if candidate.width >= full_width:
-            break
-        if _is_list_item(text) or _heading_level(candidate, median_word_height):
-            break
-        if candidate.x_center <= right_column:
-            break
-        if EQUATION_NUMBER_RE.match(text):
-            # Right-margin equation number: consume, do not emit.
-            consumed += 1
-            previous = candidate
-            j += 1
-            continue
-        formula.append(text)
-        consumed += 1
-        previous = candidate
-        j += 1
-    return consumed
-
-
-def _is_trivial_formula_token(text: str) -> bool:
-    """A fragment too small to deserve its own math block.
-
-    Display equations get shredded by PDF extraction into per-token lines
-    (a lone ``=``, a single letter, a bare ``(1)``). Each such token, on its
-    own, must not start nor become a fenced math block; it is only meaningful
-    grouped with the rest of its equation cluster.
-    """
-    text = text.strip()
-    if not text:
-        return True
-    if EQUATION_NUMBER_RE.match(text):
-        return True
-    if re.fullmatch(r"[A-Za-z]=\d+", text):  # summation index like "i=0"
-        return True
-    if len(text.split()) == 1 and len(text) <= 4:
         return True
     return False
 

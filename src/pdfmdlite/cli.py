@@ -93,16 +93,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="DPI for extracted figure/table/equation crops.",
     )
     parser.add_argument(
-        "--math",
-        choices=("on", "off"),
-        default="on",
-        help=(
-            "Equation handling: 'on' reconstructs deterministic LaTeX from the "
-            "PDF glyph stream (display math as fenced math blocks, inline math as "
-            "$...$); 'off' uses the legacy character-heuristic path."
-        ),
-    )
-    parser.add_argument(
         "--inline-images",
         action="store_true",
         help=(
@@ -187,7 +177,6 @@ def main(argv: list[str] | None = None) -> int:
         asset_base_dir=asset_base_dir,
         artifact_dpi=args.artifact_dpi,
         jobs=args.jobs,
-        math=args.math,
         inline_images=args.inline_images,
     )
 
