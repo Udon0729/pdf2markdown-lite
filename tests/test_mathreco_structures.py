@@ -73,6 +73,18 @@ class SymbolTableTests(unittest.TestCase):
             r"\mathbb{R}",
         )
 
+    def test_slot_override_by_codepoint(self) -> None:
+        # CMSY 'L'/'{'/'}' are really \mathcal{L} and set braces; they resolve
+        # from the character's encoding slot, no glyph id needed.
+        self.assertEqual(
+            classify(glyph("L", "CMSY10", 0, 0, 0, 0, 5, 10))[0], r"\mathcal{L}"
+        )
+        self.assertEqual(classify(glyph("{", "CMSY10", 0, 0, 0, 0, 5, 10))[0], r"\{")
+        self.assertEqual(classify(glyph("}", "CMSY10", 0, 0, 0, 0, 5, 10))[0], r"\}")
+        self.assertEqual(
+            classify(glyph("R", "MSBM10", 0, 0, 0, 0, 5, 10)), ("R", "mathbb")
+        )
+
     def test_math_alphanumeric_runs(self) -> None:
         self.assertEqual(_math_alphanumeric(0x1D400), ("A", "mathbf"))
         self.assertEqual(_math_alphanumeric(0x1D434), ("A", "italic_bare"))

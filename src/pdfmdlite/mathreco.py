@@ -7,9 +7,9 @@ only geometry plus table lookup.
 
 This module re-reads a ``fitz`` page via the ``rawdict`` text extraction (which,
 unlike ``get_text("words")``, preserves per-glyph font/size/origin and keeps an
-entire math baseline together) joined with ``get_texttrace`` for the reliable
-glyph id. It exposes the per-glyph layer that the later structure/layout pass
-depends on:
+entire math baseline together). The per-glyph font name plus the character (its
+encoding slot for math fonts) is all the symbol tables need. It exposes the
+per-glyph layer that the later structure/layout pass depends on:
 
 * :class:`MathGlyph` -- one frozen glyph record (char, font, size, flags,
   origin, bbox, glyph id).
@@ -102,12 +102,11 @@ class MathRecoUnhandled(Exception):
     text (display math also emits a warning), never replaced by an image crop.
     """
 
-    def __init__(self, font: str, gid: int, char: str) -> None:
+    def __init__(self, font: str, char: str) -> None:
         self.font = font
-        self.gid = gid
         self.char = char
         super().__init__(
-            f"unhandled math glyph: font={font!r} gid={gid} char={char!r} "
+            f"unhandled math glyph: font={font!r} char={char!r} "
             f"(codepoint {ord(char) if len(char) == 1 else '?'})"
         )
 
@@ -118,8 +117,7 @@ class MathGlyph:
 
     Coordinates are PDF points with a top-left origin and y increasing downward,
     matching the rest of the pipeline. ``ox``/``oy`` are the glyph's baseline
-    origin; ``x0..y1`` is its bounding box; ``gid`` is the font glyph id (used
-    only for fonts where the rawdict char is wrong/ambiguous).
+    origin; ``x0..y1`` is its bounding box.
     """
 
     char: str
@@ -132,7 +130,6 @@ class MathGlyph:
     y0: float
     x1: float
     y1: float
-    gid: int = -1
 
     @property
     def width(self) -> float:
@@ -341,9 +338,9 @@ FONT_STYLE: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"^(?:NimbusRom|Times|TimesNewRoman)"), "upright"),
 ]
 
-# (font_prefix, glyph_id) -> LaTeX token, for slots where the rawdict char is
-# wrong or ambiguous. The CMEX large operator is NOT keyed here (its gid is
-# always 0xFFFD); it is handled by the geometry branch.
+# (font_prefix, char codepoint) -> LaTeX token, for math-font slots whose
+# character would otherwise resolve to the wrong token (e.g. CMSY 'L' is really
+# \mathcal{L}). The CMEX large operators are handled by the geometry branch.
 SLOT_OVERRIDE: dict[tuple[str, int], str] = {
     ("MSBM", 82): "R",          # blackboard R; FONT_STYLE wraps -> \mathbb{R}
     ("CMSY", 123): r"\{",
@@ -352,17 +349,21 @@ SLOT_OVERRIDE: dict[tuple[str, int], str] = {
     ("CMSY", 76): r"\mathcal{L}",
 }
 
-# CMSY glyph ids that are bare math delimiters ('{', '}', '|'). A run whose only
-# body-size math content is a delimiter is layout punctuation, not an inline
+# CMSY char codepoints that are bare math delimiters ('{', '}', '|'). A run whose
+# only body-size math content is a delimiter is layout punctuation, not an inline
 # expression (e.g. the '{...}@gmail.com' author braces), so the inline detector
 # refuses to promote it to math. Real inline runs that legitimately use these
 # delimiters (e.g. \{\mathbf{g}_{j}\}) also carry CMBX/CMMI content and pass.
-_CMSY_DELIMITER_GIDS = frozenset({123, 124, 125})
+_CMSY_DELIMITER_CODES = frozenset({123, 124, 125})
 
 
 def _is_math_delimiter_glyph(glyph: MathGlyph) -> bool:
     """True for a CMSY bare delimiter glyph ('{', '}', '|')."""
-    return _font_prefix(glyph.font) == "CMSY" and glyph.gid in _CMSY_DELIMITER_GIDS
+    return (
+        _font_prefix(glyph.font) == "CMSY"
+        and len(glyph.char) == 1
+        and ord(glyph.char) in _CMSY_DELIMITER_CODES
+    )
 
 # Accent glyph codepoint -> LaTeX accent command. Detected by x-overlap with the
 # following base glyph (handled in the structure pass). Both the spacing
@@ -545,7 +546,7 @@ def classify(glyph: MathGlyph) -> tuple[str, str]:
 
     Resolution order (see module docstring / plan):
       1. CMEX -> large-operator placeholder, resolved by geometry.
-      2. (font_prefix, gid) in SLOT_OVERRIDE -> that token.
+      2. (font_prefix, char codepoint) in SLOT_OVERRIDE -> that token.
       3. rawdict char is a known non-ASCII symbol (UNI2TEX) -> that token.
       4. rawdict char is normal printable ASCII -> identity.
       5. rawdict char is a Mathematical Alphanumeric Symbols codepoint -> its
@@ -563,12 +564,11 @@ def classify(glyph: MathGlyph) -> tuple[str, str]:
         return LARGEOP_PLACEHOLDER, "largeop"
 
     prefix = _font_prefix(glyph.font)
-    override = SLOT_OVERRIDE.get((prefix, glyph.gid))
-    if override is not None:
-        return override, style
-
     if len(glyph.char) == 1:
         codepoint = ord(glyph.char)
+        override = SLOT_OVERRIDE.get((prefix, codepoint))
+        if override is not None:
+            return override, style
         if codepoint in UNI2TEX:
             return UNI2TEX[codepoint], style
         if codepoint in ACCENT:
@@ -579,35 +579,7 @@ def classify(glyph: MathGlyph) -> tuple[str, str]:
         if mapped is not None:
             return mapped
 
-    raise MathRecoUnhandled(glyph.font, glyph.gid, glyph.char)
-
-
-def _texttrace_gid_index(page: Any) -> dict[tuple[float, float], int]:
-    """Map a glyph's rounded baseline origin to its reliable glyph id.
-
-    The rawdict and texttrace streams align exactly on the baseline origin
-    (proven to 0.1pt), so the rounded origin is the join key. The texttrace
-    ``ucs`` field is garbage for math fonts and is ignored.
-    """
-    try:
-        spans = page.get_texttrace()
-    except Exception:
-        return {}
-
-    index: dict[tuple[float, float], int] = {}
-    for span in spans:
-        chars = span.get("chars") if isinstance(span, dict) else None
-        if not chars:
-            continue
-        for item in chars:
-            # item is (glyph_id, ucs, origin, bbox).
-            if len(item) < 3:
-                continue
-            gid = item[0]
-            origin = item[2]
-            key = (round(float(origin[0]), 1), round(float(origin[1]), 1))
-            index.setdefault(key, int(gid))
-    return index
+    raise MathRecoUnhandled(glyph.font, glyph.char)
 
 
 def extract_math_glyphs(page: Any, clip: Any | None = None) -> list[MathGlyph]:
@@ -619,7 +591,6 @@ def extract_math_glyphs(page: Any, clip: Any | None = None) -> list[MathGlyph]:
     only confuse the geometry pass.
     """
     rawdict = page.get_text("rawdict")
-    gid_by_origin = _texttrace_gid_index(page)
     clip_box = _coerce_clip(clip)
 
     glyphs: list[MathGlyph] = []
@@ -641,7 +612,6 @@ def extract_math_glyphs(page: Any, clip: Any | None = None) -> list[MathGlyph]:
                     if clip_box is not None and not _origin_in_box(ox, oy, clip_box):
                         continue
                     bbox = ch["bbox"]
-                    gid = gid_by_origin.get((round(ox, 1), round(oy, 1)), -1)
                     glyphs.append(
                         MathGlyph(
                             char=char,
@@ -654,7 +624,6 @@ def extract_math_glyphs(page: Any, clip: Any | None = None) -> list[MathGlyph]:
                             y0=float(bbox[1]),
                             x1=float(bbox[2]),
                             y1=float(bbox[3]),
-                            gid=gid,
                         )
                     )
     glyphs.sort(key=lambda g: (round(g.oy, 1), g.ox))
@@ -884,9 +853,9 @@ def _dominant_baseline(glyphs: list[MathGlyph], row_size: float) -> float:
 
 
 # CMEX brace pieces that draw an \underbrace decoration ('|', '{', 'z', '}').
-# They report a readable char but the SAME garbage gid (0xFFFD) as the large
-# operator, so they are told apart from \sum by being a *brace* char in a CMEX
-# font (proven page 3: the '|{z}|' pieces of the two underbraces in eq 4).
+# They share the CMEX large-operator font, so they are told apart from \sum by
+# being a *brace* char in a CMEX font (proven page 3: the '|{z}|' pieces of the
+# two underbraces in eq 4).
 CMEX_BRACE_CHARS = frozenset("|{z}")
 
 
@@ -1662,27 +1631,14 @@ def _emit_largeop(
 def _largeop_command(op: MathGlyph) -> str:
     """Resolve the LaTeX command for a CMEX large operator.
 
-    The rawdict char carries the OMX encoding slot (reliable on both sample
-    papers), the texttrace glyph id is a legacy fallback, and the placeholder
-    covers anything else.
+    The rawdict char carries the OMX encoding slot (reliable on the sample
+    papers); the placeholder covers anything else.
     """
     if len(op.char) == 1:
         cmd = _CMEX_SLOT_LARGEOPS.get(ord(op.char))
         if cmd is not None:
             return cmd
-    cmd = _LARGEOP_BY_GID.get(op.gid)
-    if cmd is not None:
-        return cmd
     return LARGEOP_PLACEHOLDER
-
-
-# CMEX10 glyph id -> large-operator command. The rawdict char is garbage and the
-# texttrace gid for the very large variants is 0xFFFD (handled by the default).
-_LARGEOP_BY_GID: dict[int, str] = {
-    88: r"\sum",
-    89: r"\prod",
-    90: r"\int",
-}
 
 
 def _recognise_group(glyphs: list[MathGlyph], parent_size: float) -> str:
@@ -1958,13 +1914,12 @@ class _RawLine:
 
 
 def _raw_lines(page: Any) -> list[_RawLine]:
-    """Harvest rawdict text lines, with per-glyph font/size/origin and a gid.
+    """Harvest rawdict text lines, with per-glyph font/size/origin.
 
     rawdict sometimes over-prints a glyph (the same origin twice); exact
     duplicates are collapsed so conservation is not thrown off.
     """
     rawdict = page.get_text("rawdict")
-    gid_by_origin = _texttrace_gid_index(page)
     lines: list[_RawLine] = []
     for block in rawdict.get("blocks", []):
         if block.get("type", 0) != 0:
@@ -1988,7 +1943,6 @@ def _raw_lines(page: Any) -> list[_RawLine]:
                         continue
                     seen.add(key)
                     bbox = ch["bbox"]
-                    gid = gid_by_origin.get((round(ox, 1), round(oy, 1)), -1)
                     glyphs.append(
                         MathGlyph(
                             char=char,
@@ -2001,7 +1955,6 @@ def _raw_lines(page: Any) -> list[_RawLine]:
                             y0=float(bbox[1]),
                             x1=float(bbox[2]),
                             y1=float(bbox[3]),
-                            gid=gid,
                         )
                     )
             if not glyphs:
