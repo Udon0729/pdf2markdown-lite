@@ -1,4 +1,4 @@
-# pdfmdlite
+# pdf2markdown-lite
 
 > English version: [README.md](README.md)
 
