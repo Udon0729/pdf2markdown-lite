@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Python のセットアップ
+        run: uv python install ${{ matrix.python-version }}
+
+      - name: 依存関係のインストール
+        run: uv sync --no-editable
+
+      - name: テストの実行
+        run: uv run --no-editable python -m unittest discover -s tests -v
