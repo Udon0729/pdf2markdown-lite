@@ -25,9 +25,9 @@ brew install uv
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-標準的な変換には `uv` と `pymupdf` だけが必要です。`pymupdf` は `uv sync` で自動的に入ります。
+最低限必要なライブラリは`uv` と `pymupdf` です。`pymupdf` は `uv sync` で自動的に入ります。
 
-Poppler と Tesseract は任意です。
+Poppler と Tesseract は使用するオプションによって別途必要になります。
 
 ```bash
 # macOS
